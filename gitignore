@@ -1,0 +1,31 @@
+# Executables
+exfs-log-structured-file-system
+
+# Build files
+*.o
+*.obj
+*.exe
+*.out
+
+# File system data (these are created at runtime)
+segments/
+checkpoint.bin
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# VSCode specific
+.vscode/
+*.code-workspace
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled outputs
+build/
