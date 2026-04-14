@@ -22,7 +22,7 @@ void imap_update(uint32_t inode_num, struct location *loc);
 // Find where an inode lives
 struct location imap_lookup(uint32_t inode_num);
 
-// Write the entire imap to segments (called during checkpoint)
+// Write the entire imap to segments
 void imap_flush(void);
 
 // Get the current imap location for checkpoint

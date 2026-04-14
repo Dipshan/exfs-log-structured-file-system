@@ -3,7 +3,7 @@
 
 #include "../common.h"
 
-// Checkpoint Region - 4096 bytes total (requirement)
+// Checkpoint Region - 4096 bytes total
 struct checkpoint
 {
     uint32_t active_segment;       // Current segment being written to

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Block and segment sizes (requirements)
+// Block and segment sizes
 #define BLOCK_SIZE 4096      // 4KB blocks and inodes
 #define SEGMENT_SIZE 1048576 // 1MB segments
 
@@ -23,7 +23,7 @@
 // Location structure - where something lives in the log
 struct location
 {
-    uint32_t segment_id; // Which segment file (0, 1, 2...)
+    uint32_t segment_id; // Segment file
     uint32_t offset;     // Byte offset within that segment
 };
 

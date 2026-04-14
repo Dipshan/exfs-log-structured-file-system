@@ -1,4 +1,4 @@
-# CIS - Collaborative Interactive Shell
+# ExFS-Log-Structured File System
 A log-structured file system (LFS) implementation in C that appends all updates sequentially to a log.
 
 ## Authors

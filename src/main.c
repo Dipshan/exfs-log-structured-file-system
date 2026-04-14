@@ -1,3 +1,9 @@
+// ExFS-Log-Structured File System
+// Authors:
+// Anuska Bhattarai (800832698) - anuskbh@siue.edu
+// Deepshan Adhikari (800846035) - deepadh@siue.edu
+// Sumit Shrestha (800835513) - sumishr@siue.edu
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -21,7 +27,7 @@ void print_banner(void)
 {
     printf(COLOR_CYAN COLOR_BOLD);
     printf("\n╔══════════════════════════════════════════════════════════╗\n");
-    printf("║                    EXFS-LOG FILE SYSTEM                    ║\n");
+    printf("║              EXFS-LOG-STRUCTURED FILE SYSTEM               ║\n");
     printf("║              Log-Structured File System (LFS)              ║\n");
     printf("╚══════════════════════════════════════════════════════════╝\n");
     printf(COLOR_RESET "\n");

@@ -22,7 +22,7 @@ struct directory_entry
     char name[256];     // Name of file or directory (256 bytes)
     uint32_t inode_num; // Inode number this name points to (4 bytes)
     uint32_t reserved;  // Padding to 264 bytes (for alignment)
-}; // Total: 264 bytes, 15 entries per block (3960 bytes) + some padding
+};
 
 // Create a new inode
 void inode_create(uint32_t *inode_num, uint32_t type);
@@ -39,7 +39,7 @@ void dir_add_entry(uint32_t dir_inode, const char *name, uint32_t child_inode);
 // Remove an entry from a directory
 void dir_remove_entry(uint32_t dir_inode, const char *name);
 
-// Find an entry in a directory, returns inode number or 0 (root is 0, so 0 means not found)
+// Find an entry in a directory, returns inode number or 0 (not found)
 uint32_t dir_find_entry(uint32_t dir_inode, const char *name);
 
 // List all entries in a directory with indentation (recursive)

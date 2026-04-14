@@ -464,7 +464,7 @@ void fs_list(void)
 // Cleaner implementation
 void fs_cleaner(void)
 {
-    printf("\n=== CLEANER ===\n");
+    printf("\n----- CLEANER -----\n");
     printf("Current active segment: %d\n", checkpoint.active_segment);
     printf("Current write offset: %d\n\n", checkpoint.active_offset);
 
@@ -614,7 +614,7 @@ void fs_cleaner(void)
     checkpoint.imap_location = imap_get_current_location();
     fs_write_checkpoint();
 
-    printf("\n=== CLEANER COMPLETE ===\n");
+    printf("\n----- CLEANER COMPLETE -----\n");
     printf("Reclaimed space by compacting live data\n");
 }
 
@@ -631,7 +631,7 @@ void fs_debug(const char *path)
     struct inode inode;
     inode_read(inode_num, &inode);
 
-    printf("\n=== INODE DEBUG ===\n");
+    printf("\n----- INODE DEBUG -----\n");
     printf("Path: %s\n", path);
     printf("Inode number: %u\n", inode_num);
     printf("Type: %s\n", inode.type == TYPE_FILE ? "FILE" : "DIRECTORY");
