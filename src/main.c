@@ -25,17 +25,17 @@
 
 void print_banner(void)
 {
-    printf(COLOR_CYAN COLOR_BOLD);
+    printf(COLOR_GREEN);
     printf("\n╔══════════════════════════════════════════════════════════╗\n");
-    printf("║              EXFS-LOG-STRUCTURED FILE SYSTEM               ║\n");
-    printf("║              Log-Structured File System (LFS)              ║\n");
+    printf("║              EXFS-LOG-STRUCTURED FILE SYSTEM             ║\n");
+    printf("║              Log-Structured File System (LFS)            ║\n");
     printf("╚══════════════════════════════════════════════════════════╝\n");
     printf(COLOR_RESET "\n");
 }
 
 void print_usage(void)
 {
-    printf(COLOR_YELLOW "USAGE:\n" COLOR_RESET);
+    printf(COLOR_GREEN "USAGE:\n" COLOR_RESET);
     printf("  ./exfs-log [OPTION] [ARGUMENTS]\n\n");
 
     printf(COLOR_GREEN "OPTIONS:\n" COLOR_RESET);
@@ -49,12 +49,12 @@ void print_usage(void)
     printf("  %-30s %s\n", "--init", "Initialize a fresh file system");
 
     printf(COLOR_GREEN "\nEXAMPLES:\n" COLOR_RESET);
-    printf("  %-35s %s\n", "./exfs-log -l", "Show all files and directories");
-    printf("  %-35s %s\n", "./exfs-log -a /docs/notes.txt -f ~/notes.txt", "Add notes.txt");
-    printf("  %-35s %s\n", "./exfs-log -r /docs/notes.txt", "Remove notes.txt");
-    printf("  %-35s %s\n", "./exfs-log -e /docs/notes.txt > output.txt", "Extract and save");
-    printf("  %-35s %s\n", "./exfs-log -c", "Run cleaner");
-    printf("  %-35s %s\n", "./exfs-log -D /docs", "Debug directory");
+    printf("  %-50s %s\n", "./exfs-log -l", "Show all files and directories");
+    printf("  %-50s %s\n", "./exfs-log -a /docs/notes.txt -f ~/notes.txt", "Add notes.txt");
+    printf("  %-50s %s\n", "./exfs-log -r /docs/notes.txt", "Remove notes.txt");
+    printf("  %-50s %s\n", "./exfs-log -e /docs/notes.txt > output.txt", "Extract and save");
+    printf("  %-50s %s\n", "./exfs-log -c", "Run cleaner");
+    printf("  %-50s %s\n", "./exfs-log -D /docs", "Debug directory");
     printf("\n");
 }
 

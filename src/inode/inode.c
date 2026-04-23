@@ -218,12 +218,12 @@ void dir_list_recursive(uint32_t dir_inode, int depth)
 
             if (child.type == TYPE_DIRECTORY)
             {
-                printf("📁 %s/ (inode %d)\n", entries[i].name, entries[i].inode_num);
+                printf("%s/ (inode %d)\n", entries[i].name, entries[i].inode_num);
                 dir_list_recursive(entries[i].inode_num, depth + 1);
             }
             else
             {
-                printf("📄 %s (inode %d, %d bytes)\n", entries[i].name, entries[i].inode_num, child.size);
+                printf("%s (inode %d, %d bytes)\n", entries[i].name, entries[i].inode_num, child.size);
             }
         }
     }
