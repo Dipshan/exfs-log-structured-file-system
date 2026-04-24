@@ -79,7 +79,8 @@ void fs_init(void)
         imap_init();
 
         open_current_segment();
-        printf("File system loaded. Writing to segment %d at offset %d\n",
+        // changed to fprint and stderr
+        fprintf(stderr, "File system loaded. Writing to segment %d at offset %d\n",
                checkpoint.active_segment, checkpoint.active_offset);
     }
     else
