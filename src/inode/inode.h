@@ -19,10 +19,9 @@ struct inode
 // Directory entry - stored in data blocks of directory inodes
 struct directory_entry
 {
-    char name[256];     // Name of file or directory (256 bytes)
+    char name[252];     // Name of file or directory (252 bytes)
     uint32_t inode_num; // Inode number this name points to (4 bytes)
-    uint32_t reserved;  // Padding to 264 bytes (for alignment)
-};
+}; // fix: Total is now exactly 256 bytes
 
 // Create a new inode
 void inode_create(uint32_t *inode_num, uint32_t type);

@@ -92,8 +92,8 @@ void dir_add_entry(uint32_t dir_inode, const char *name, uint32_t child_inode)
     }
 
     // Add the new entry
-    strncpy(entries[slot].name, name, 255);
-    entries[slot].name[255] = '\0';
+    strncpy(entries[slot].name, name, 251);
+    entries[slot].name[251] = '\0';
     entries[slot].inode_num = child_inode;
 
     // Write updated directory data block
@@ -133,7 +133,7 @@ void dir_remove_entry(uint32_t dir_inode, const char *name)
         if (entries[i].inode_num != 0 && strcmp(entries[i].name, name) == 0)
         {
             entries[i].inode_num = 0;
-            memset(entries[i].name, 0, 256);
+            memset(entries[i].name, 0, 252); //changed from 256 to 252
             found = 1;
             break;
         }
