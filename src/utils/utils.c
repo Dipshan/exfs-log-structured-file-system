@@ -106,27 +106,24 @@ void create_parent_dirs(const char *path)
     {
         create_parent_dirs(parent);
 
-        uint32_t parent_inode = find_inode(parent);
-        if (parent_inode == 0)
+        // FIX: We need the inode of the GRANDPARENT to create the parent directory
+        char grand_parent[1024];
+        char dir_name[256];
+        split_path(parent, grand_parent, dir_name);
+
+        uint32_t gp_inode = find_inode(grand_parent);
+        
+        // FIX: We must allow gp_inode to be 0 IF the grandparent is the root directory ("/")
+        if (gp_inode == 0 && strcmp(grand_parent, "/") != 0)
         {
-            printf("ERROR: Could not find/create parent %s\n", parent);
+            printf("ERROR: Could not find/create parent %s\n", grand_parent);
             return;
         }
 
         uint32_t new_dir_inode;
         inode_create(&new_dir_inode, TYPE_DIRECTORY);
 
-        // Get name of this directory (last part of parent)
-        char *dir_name = strrchr(parent, '/');
-        if (dir_name)
-        {
-            dir_name++;
-        }
-        else
-        {
-            dir_name = (char *)parent;
-        }
-
-        dir_add_entry(parent_inode, dir_name, new_dir_inode);
+        // Add the new directory to its grandparent
+        dir_add_entry(gp_inode, dir_name, new_dir_inode);
     }
 }

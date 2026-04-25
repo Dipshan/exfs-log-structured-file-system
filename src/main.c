@@ -25,12 +25,12 @@
 
 void print_banner(void)
 {
-    printf(COLOR_GREEN);
-    printf("\n╔══════════════════════════════════════════════════════════╗\n");
-    printf("║              EXFS-LOG-STRUCTURED FILE SYSTEM             ║\n");
-    printf("║              Log-Structured File System (LFS)            ║\n");
-    printf("╚══════════════════════════════════════════════════════════╝\n");
-    printf(COLOR_RESET "\n");
+    fprintf(stderr, COLOR_GREEN);
+    fprintf(stderr, "\n╔══════════════════════════════════════════════════════════╗\n");
+    fprintf(stderr, "║              EXFS-LOG-STRUCTURED FILE SYSTEM             ║\n");
+    fprintf(stderr, "║              Log-Structured File System (LFS)            ║\n");
+    fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
+    fprintf(stderr, COLOR_RESET "\n");
 }
 
 void print_usage(void)
@@ -97,14 +97,14 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[1], "-a") == 0)
     {
-        if (argc < 5 || strcmp(argv[2], "-f") != 0)
+        if (argc < 5 || strcmp(argv[3], "-f") != 0)
         {
             fprintf(stderr, COLOR_RED "ERROR: Invalid add syntax. Use: ./exfs-log-structured-file-system -a /path -f /host/file\n" COLOR_RESET);
             return 1;
         }
 
-        char *fs_path = argv[3];
-        char *host_path = argv[4];
+        char *fs_path = argv[2]; // The FS path is right after -a
+        char *host_path = argv[4]; // The host path is right after -f
 
         if (access(host_path, F_OK) != 0)
         {

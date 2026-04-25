@@ -79,7 +79,8 @@ void fs_init(void)
         imap_init();
 
         open_current_segment();
-        printf("File system loaded. Writing to segment %d at offset %d\n",
+        // changed to fprint and stderr
+        fprintf(stderr, "File system loaded. Writing to segment %d at offset %d\n",
                checkpoint.active_segment, checkpoint.active_offset);
     }
     else
@@ -337,6 +338,11 @@ void fs_add(const char *path, const char *source)
     inode_write(file_inode, &inode);
 
     printf("Added file '%s' (%u bytes, %u blocks)\n", path, file_size, total_blocks);
+
+    // FIX: Flush the in-memory index and save the checkpoint before exiting
+    imap_flush();
+    checkpoint.imap_location = imap_get_current_location();
+    fs_write_checkpoint();
 }
 
 // Extract a file to stdout
@@ -452,6 +458,11 @@ void fs_remove(const char *path)
     dir_remove_entry(parent_inode, name);
 
     printf("Removed '%s'\n", path);
+
+    // FIX: Flush the in-memory index and save the checkpoint before exiting
+    imap_flush();
+    checkpoint.imap_location = imap_get_current_location();
+    fs_write_checkpoint();
 }
 
 // List entire file system tree
