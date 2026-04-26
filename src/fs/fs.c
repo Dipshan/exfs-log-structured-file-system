@@ -182,9 +182,12 @@ void fs_append(void *data, size_t size, struct location *loc)
     loc->segment_id = checkpoint.active_segment;
     loc->offset = checkpoint.active_offset;
 
-    // Write the data
+    /// Write the data
     fseek(current_file, checkpoint.active_offset, SEEK_SET);
     safe_write(current_file, data, size);
+
+    // FIX: Force C to flush the RAM buffer to the hard drive so immediate fs_read calls can see it!
+    fflush(current_file);
 
     // Advance write head
     checkpoint.active_offset += size;
@@ -420,16 +423,24 @@ void fs_cleaner(void)
     printf("Current active segment: %d\n", checkpoint.active_segment);
     printf("Current write offset: %d\n\n", checkpoint.active_offset);
 
+    // FIX: Memorize the segment we started on so we don't delete our own new data!
+    uint32_t starting_segment = checkpoint.active_segment;
+
     // Step 1: Get all live inode locations from imap
     struct location live_inodes[10000];
+    uint32_t live_inode_nums[10000]; // FIX: Array to remember the real Inode IDs!
     uint32_t live_count = 0;
 
     // Collect all live inodes
-    for (uint32_t i = 0; i <= checkpoint.next_inode_num; i++)
+    for (uint32_t i = 0; i < 10000; i++)
     {
         struct location loc = imap_lookup(i);
         if (loc.segment_id != 0xFFFFFFFF)
-            live_inodes[live_count++] = loc;
+        {
+            live_inodes[live_count] = loc;
+            live_inode_nums[live_count] = i; // Save the real ID
+            live_count++;
+        }
     }
     printf("Live inodes: %u\n", live_count);
 
@@ -437,11 +448,12 @@ void fs_cleaner(void)
     struct location live_blocks[100000];
     uint32_t block_count = 0;
 
-    for (uint32_t i = 0; i < live_count; i++)
+ for (uint32_t i = 0; i < live_count; i++)
     {
         struct inode inode;
         fs_read(&live_inodes[i], &inode, sizeof(inode));
-        uint32_t num_blocks = (inode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        // FIX: Force directories to report 1 block so their contents get copied
+        uint32_t num_blocks = (inode.type == TYPE_DIRECTORY) ? 1 : (inode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
         for (uint32_t b = 0; b < num_blocks; b++)
         {
@@ -474,12 +486,13 @@ void fs_cleaner(void)
     // Step 5: Update inodes with new block locations
     // Rebuild mapping from old to new locations
     // For simplicity, we update each inode's block pointers
-    uint32_t block_idx = 0;
+   uint32_t block_idx = 0;
     for (uint32_t i = 0; i < live_count; i++)
     {
         struct inode inode;
         fs_read(&live_inodes[i], &inode, sizeof(inode));
-        uint32_t num_blocks = (inode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        // FIX: Same directory override here
+        uint32_t num_blocks = (inode.type == TYPE_DIRECTORY) ? 1 : (inode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
         // Create new inode with updated block pointers
         struct inode new_inode;
@@ -497,7 +510,8 @@ void fs_cleaner(void)
             inode_set_block_location(&new_inode, b, &new_block_locations[block_idx++]);
 
         // Write updated inode
-        inode_write(i, &new_inode);
+        // FIX: Use the tracked Inode ID, not the loop index!
+        inode_write(live_inode_nums[i], &new_inode);
     }
 
     // Step 6: Delete old segment files (keep current active)
@@ -513,8 +527,8 @@ void fs_cleaner(void)
             uint32_t seg_id;
             sscanf(entry->d_name, "segment%u.bin", &seg_id);
 
-            // Don't delete the new active segment(s)
-            if (seg_id != checkpoint.active_segment)
+            // FIX: Delete segments older than our starting point, keep all the new ones!
+            if (seg_id < starting_segment)
             {
                 char path[100];
                 sprintf(path, "segments/%s", entry->d_name);

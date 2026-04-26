@@ -3,12 +3,16 @@
 #include "../imap/imap.h"
 #include "../utils/utils.h"
 
-static uint32_t next_inode = 1; // Next free inode number (0 is root)
-
 // Create a new inode (file or directory)
 void inode_create(uint32_t *inode_num, uint32_t type)
 {
-    *inode_num = next_inode++;
+    // FIX: Dynamically scan for the next available Inode
+    uint32_t next_inode = 1;
+    while (imap_lookup(next_inode).segment_id != 0xFFFFFFFF)
+    {
+        next_inode++;
+    }
+    *inode_num = next_inode;
 
     struct inode inode;
     memset(&inode, 0, sizeof(inode));
