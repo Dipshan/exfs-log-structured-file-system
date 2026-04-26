@@ -183,10 +183,8 @@ void fs_append(void *data, size_t size, struct location *loc)
     // Check if incoming data fits within the active segment limit
     if (checkpoint.active_offset + (int)size > SEGMENT_SIZE)
     {
-        // Segment full: seal it and generate the next segment
-        if (current_file)
-            fclose(current_file);
-
+        // FIX: Removed the standalone fclose() to prevent Linux double-free crashes.
+        // open_current_segment() automatically and safely closes the old file.
         checkpoint.active_segment++;
         checkpoint.active_offset = 0;
 
@@ -197,22 +195,16 @@ void fs_append(void *data, size_t size, struct location *loc)
         printf("Created new segment %d\n", checkpoint.active_segment);
     }
 
-    // Record the physical address where this data will reside
     loc->segment_id = checkpoint.active_segment;
     loc->offset = checkpoint.active_offset;
 
-    // Append the data
     fseek(current_file, checkpoint.active_offset, SEEK_SET);
     safe_write(current_file, data, size);
 
-    // CRITICAL: Flush the C RAM buffer to the hard drive to guarantee 
-    // immediate accessibility for sequential fs_read calls (indirect pointers).
     fflush(current_file);
 
-    // Advance write head
     checkpoint.active_offset += size;
 
-    // Snapshot the checkpoint periodically to mitigate data loss during potential crashes
     static int counter = 0;
     if (++counter >= 5)
     {
@@ -251,12 +243,12 @@ void fs_read(struct location *loc, void *buffer, size_t size)
  * Ingests a host file, fragments it into 4KB blocks, and appends the blocks,
  * updating the parent directory structures accordingly.
  */
-void fs_add(const char *path, const char *source)
+void fs_add(const char *target_dir, const char *source_file)
 {
-    FILE *host_file = fopen(source, "rb");
+    FILE *host_file = fopen(source_file, "rb");
     if (!host_file)
     {
-        printf("ERROR: Cannot open host file '%s'\n", source);
+        printf("ERROR: Cannot open host file '%s'\n", source_file);
         return;
     }
 
@@ -264,17 +256,22 @@ void fs_add(const char *path, const char *source)
     uint32_t file_size = (uint32_t)ftell(host_file);
     fseek(host_file, 0, SEEK_SET);
 
-    // Resolve directory hierarchy
-    char parent_path[1024], file_name[256];
-    split_path(path, parent_path, file_name);
+    // FIX: Extract the actual file name from the host machine's source path
+    char host_parent[1024], file_name[256];
+    split_path(source_file, host_parent, file_name);
 
-    if (strcmp(parent_path, "/") != 0 && !path_exists(parent_path))
-        create_parent_dirs(path);
-
-    uint32_t parent_inode = (strcmp(parent_path, "/") == 0) ? 0 : find_inode(parent_path);
-    if (parent_inode == 0 && strcmp(parent_path, "/") != 0)
+    // FIX: Force the creation of the full target directory structure
+    if (strcmp(target_dir, "/") != 0)
     {
-        printf("ERROR: Parent directory not found\n");
+        char dummy_path[1024];
+        snprintf(dummy_path, sizeof(dummy_path), "%s/dummy", target_dir);
+        create_parent_dirs(dummy_path);
+    }
+
+    uint32_t parent_inode = (strcmp(target_dir, "/") == 0) ? 0 : find_inode(target_dir);
+    if (parent_inode == 0 && strcmp(target_dir, "/") != 0)
+    {
+        printf("ERROR: Target directory not found\n");
         fclose(host_file);
         return;
     }
@@ -285,25 +282,22 @@ void fs_add(const char *path, const char *source)
 
     uint32_t total_blocks = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
     char buffer[BLOCK_SIZE];
-    
+
     struct inode inode;
     inode_read(file_inode, &inode);
 
-    // Fragment file into 4KB LFS blocks
     for (uint32_t block_num = 0; block_num < total_blocks; block_num++)
     {
         int bytes_read = fread(buffer, 1, BLOCK_SIZE, host_file);
         if (bytes_read == 0)
             break;
 
-        // Zero-pad the final block to maintain 4KB alignment
         if (bytes_read < BLOCK_SIZE)
             memset(buffer + bytes_read, 0, BLOCK_SIZE - bytes_read);
 
         struct location data_loc;
         fs_append(buffer, BLOCK_SIZE, &data_loc);
 
-        // Map the block pointer (direct, single, double, or triple indirect)
         if (!inode_set_block_location(&inode, block_num, &data_loc))
         {
             printf("ERROR: Failed to set block %d\n", block_num);
@@ -316,7 +310,14 @@ void fs_add(const char *path, const char *source)
     inode.size = file_size;
     inode_write(file_inode, &inode);
 
-    printf("Added '%s' (%u bytes, %u blocks)\n", path, file_size, total_blocks);
+    // Ensure clean printout of the new path
+    char full_fs_path[1024];
+    if (strcmp(target_dir, "/") == 0)
+        snprintf(full_fs_path, sizeof(full_fs_path), "/%s", file_name);
+    else
+        snprintf(full_fs_path, sizeof(full_fs_path), "%s/%s", target_dir, file_name);
+
+    printf("Added '%s' (%u bytes, %u blocks)\n", full_fs_path, file_size, total_blocks);
 
     imap_flush();
     checkpoint.imap_location = imap_get_current_location();
