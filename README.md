@@ -1,10 +1,7 @@
 ---
 title: "ExFS-Log: Log-Structured File System"
-author: "Anushka Bhattarai, Deepshan Adhikari, Sumit Shrestha"
+author: "Anushka Bhattarai (800832698), Deepshan Adhikari (800846035), Sumit Shrestha (800835513)"
 date: "`r Sys.Date()`"
-output:
-  html_document: default
-  pdf_document: default
 ---
 
 # Overview
