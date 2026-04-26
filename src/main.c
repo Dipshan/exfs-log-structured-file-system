@@ -1,8 +1,13 @@
-// ExFS-Log-Structured File System
-// Authors:
-// Anuska Bhattarai (800832698) - anuskbh@siue.edu
-// Deepshan Adhikari (800846035) - deepadh@siue.edu
-// Sumit Shrestha (800835513) - sumishr@siue.edu
+/**
+ * ExFS-Log: Log-Structured File System
+ * * main.c
+ * Entry point for the ExFS command-line interface. Handles argument parsing,
+ * system mounting, and routing commands to the core file system logic.
+ * * Authors:
+ * - Anuska Bhattarai (800832698) - anuskbh@siue.edu
+ * - Deepshan Adhikari (800846035) - deepadh@siue.edu
+ * - Sumit Shrestha (800835513) - sumishr@siue.edu
+ */
 
 #include <stdio.h>
 #include <string.h>
@@ -14,7 +19,7 @@
 #include "utils/utils.h"
 #include "imap/imap.h"
 
-// ANSI color codes
+// ANSI color codes for terminal output
 #define COLOR_RESET "\033[0m"
 #define COLOR_RED "\033[31m"
 #define COLOR_GREEN "\033[32m"
@@ -23,16 +28,18 @@
 #define COLOR_CYAN "\033[36m"
 #define COLOR_BOLD "\033[1m"
 
+// Prints the system banner (Using safe ASCII characters for universal terminal compatibility)
 void print_banner(void)
 {
     fprintf(stderr, COLOR_GREEN);
-    fprintf(stderr, "\n╔══════════════════════════════════════════════════════════╗\n");
-    fprintf(stderr, "║              EXFS-LOG-STRUCTURED FILE SYSTEM             ║\n");
-    fprintf(stderr, "║              Log-Structured File System (LFS)            ║\n");
-    fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
+    fprintf(stderr, "\n+----------------------------------------------------------+\n");
+    fprintf(stderr, "|              EXFS-LOG-STRUCTURED FILE SYSTEM             |\n");
+    fprintf(stderr, "|              Log-Structured File System (LFS)            |\n");
+    fprintf(stderr, "+----------------------------------------------------------+\n");
     fprintf(stderr, COLOR_RESET "\n");
 }
 
+// Prints the help menu and CLI usage instructions
 void print_usage(void)
 {
     printf(COLOR_GREEN "USAGE:\n" COLOR_RESET);
@@ -62,13 +69,14 @@ int main(int argc, char *argv[])
 {
     print_banner();
 
+    // Guard clause: Ensure a command was provided
     if (argc < 2 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)
     {
         print_usage();
         return 0;
     }
 
-    // Handle initialization
+    // Handle initialization sequence
     if (strcmp(argv[1], "--init") == 0)
     {
         printf("Initializing fresh file system...\n");
@@ -77,23 +85,24 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    // Check if file system exists
+    // Guard clause: Verify the file system is mounted before executing standard commands
     if (access("checkpoint.bin", F_OK) != 0)
     {
         fprintf(stderr, COLOR_RED "ERROR: File system not initialized. Run './exfs-log-structured-file-system --init' first\n" COLOR_RESET);
         return 1;
     }
 
-    // Initialize file system
+    // Mount the file system
     fs_init();
 
-    // Handle commands
+    // --- Command Routing ---
+
     if (strcmp(argv[1], "-l") == 0)
     {
         printf("\nFile System Tree:\n");
-        printf("─────────────────\n");
+        printf("-----------------\n");
         fs_list();
-        printf("─────────────────\n");
+        printf("-----------------\n");
     }
     else if (strcmp(argv[1], "-a") == 0)
     {
@@ -103,9 +112,10 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        char *fs_path = argv[2]; // The FS path is right after -a
-        char *host_path = argv[4]; // The host path is right after -f
+        char *fs_path = argv[2]; 
+        char *host_path = argv[4]; 
 
+        // Verify the source file exists on the host machine before attempting to read it
         if (access(host_path, F_OK) != 0)
         {
             fprintf(stderr, COLOR_RED "ERROR: Host file '%s' does not exist\n" COLOR_RESET, host_path);
