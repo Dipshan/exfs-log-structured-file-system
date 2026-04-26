@@ -72,9 +72,7 @@ uint32_t find_inode(const char *path)
     {
         uint32_t next_inode = dir_find_entry(current_inode, token);
         if (next_inode == 0)
-        {
             return 0; // Not found
-        }
         current_inode = next_inode;
         token = strtok(NULL, "/");
     }
@@ -91,28 +89,23 @@ int path_exists(const char *path)
 // Create all parent directories for a path if they don't exist
 void create_parent_dirs(const char *path)
 {
-    char parent[1024];
-    char name[256];
+    char parent[1024], name[256];
     split_path(path, parent, name);
 
     // No parent directories to create
     if (strcmp(parent, "/") == 0 || strcmp(parent, ".") == 0)
-    {
         return;
-    }
 
     // If parent doesn't exist, create it
     if (!path_exists(parent))
     {
         create_parent_dirs(parent);
 
-        // FIX: We need the inode of the GRANDPARENT to create the parent directory
-        char grand_parent[1024];
-        char dir_name[256];
+        char grand_parent[1024], dir_name[256];
         split_path(parent, grand_parent, dir_name);
 
         uint32_t gp_inode = find_inode(grand_parent);
-        
+
         // FIX: We must allow gp_inode to be 0 IF the grandparent is the root directory ("/")
         if (gp_inode == 0 && strcmp(grand_parent, "/") != 0)
         {

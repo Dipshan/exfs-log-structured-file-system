@@ -13,7 +13,7 @@ struct checkpoint
     uint32_t reserved[1019];       // Padding to 4096 bytes
 };
 
-// File system operations (called from main.c)
+// File system operations
 void fs_init(void);
 void fs_add(const char *path, const char *source);
 void fs_remove(const char *path);
@@ -25,11 +25,7 @@ void fs_debug(const char *path);
 // Internal FS functions
 void fs_append(void *data, size_t size, struct location *loc);
 void fs_read(struct location *loc, void *buffer, size_t size);
-void fs_create_new_segment(void);
 void fs_write_checkpoint(void);
 void fs_read_checkpoint(void);
-
-// Get current checkpoint info
-void fs_get_checkpoint(struct checkpoint *chk);
 
 #endif

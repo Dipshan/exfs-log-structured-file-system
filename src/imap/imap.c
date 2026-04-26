@@ -41,7 +41,7 @@ void imap_init(void)
     }
 }
 
-// Write the entire imap to segments
+// Flush entire imap to segments
 void imap_flush(void)
 {
     // Write imap chunks for all inodes
@@ -50,9 +50,7 @@ void imap_flush(void)
     chunk.start_inode = 0;
 
     for (int i = 0; i < IMAP_CHUNK_SIZE && i <= max_inode; i++)
-    {
         chunk.mappings[i] = imap_cache[i];
-    }
 
     // Pad remaining with invalid
     for (int i = max_inode + 1; i < IMAP_CHUNK_SIZE; i++)
@@ -72,7 +70,7 @@ struct location imap_get_current_location(void)
     return current_imap_location;
 }
 
-// Update the map with new location for an inode
+// Update imap with new location for an inode
 void imap_update(uint32_t inode_num, struct location *loc)
 {
     if (inode_num >= 10000)
@@ -85,9 +83,7 @@ void imap_update(uint32_t inode_num, struct location *loc)
     imap_dirty = 1;
 
     if (inode_num > max_inode)
-    {
         max_inode = inode_num;
-    }
 
     // Flush every 10 updates to keep things persistent
     static int update_counter = 0;
@@ -98,21 +94,17 @@ void imap_update(uint32_t inode_num, struct location *loc)
     }
 }
 
-// Find where an inode lives, returns location
+// Look up inode location
 struct location imap_lookup(uint32_t inode_num)
 {
     struct location empty = {0xFFFFFFFF, 0};
 
     if (inode_num > max_inode)
-    {
         return empty;
-    }
 
     // If we have it in cache, use it
     if (imap_cache[inode_num].segment_id != 0xFFFFFFFF)
-    {
         return imap_cache[inode_num];
-    }
 
     return empty;
 }

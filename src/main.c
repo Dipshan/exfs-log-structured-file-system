@@ -36,7 +36,7 @@ void print_banner(void)
 void print_usage(void)
 {
     printf(COLOR_GREEN "USAGE:\n" COLOR_RESET);
-    printf("  ./exfs-log [OPTION] [ARGUMENTS]\n\n");
+    printf("  ./exfs-log-structured-file-system [OPTION] [ARGUMENTS]\n\n");
 
     printf(COLOR_GREEN "OPTIONS:\n" COLOR_RESET);
     printf("  %-30s %s\n", "-l", "List entire file system tree");
@@ -49,12 +49,12 @@ void print_usage(void)
     printf("  %-30s %s\n", "--init", "Initialize a fresh file system");
 
     printf(COLOR_GREEN "\nEXAMPLES:\n" COLOR_RESET);
-    printf("  %-50s %s\n", "./exfs-log -l", "Show all files and directories");
-    printf("  %-50s %s\n", "./exfs-log -a /docs/notes.txt -f ~/notes.txt", "Add notes.txt");
-    printf("  %-50s %s\n", "./exfs-log -r /docs/notes.txt", "Remove notes.txt");
-    printf("  %-50s %s\n", "./exfs-log -e /docs/notes.txt > output.txt", "Extract and save");
-    printf("  %-50s %s\n", "./exfs-log -c", "Run cleaner");
-    printf("  %-50s %s\n", "./exfs-log -D /docs", "Debug directory");
+    printf("  %-50s %s\n", "./exfs-log-structured-file-system -l", "Show all files and directories");
+    printf("  %-50s %s\n", "./exfs-log-structured-file-system -a /docs/notes.txt -f ~/notes.txt", "Add notes.txt");
+    printf("  %-50s %s\n", "./exfs-log-structured-file-system -r /docs/notes.txt", "Remove notes.txt");
+    printf("  %-50s %s\n", "./exfs-log-structured-file-system -e /docs/notes.txt > output.txt", "Extract and save");
+    printf("  %-50s %s\n", "./exfs-log-structured-file-system -c", "Run cleaner");
+    printf("  %-50s %s\n", "./exfs-log-structured-file-system -D /docs", "Debug directory");
     printf("\n");
 }
 
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     // Check if file system exists
     if (access("checkpoint.bin", F_OK) != 0)
     {
-        fprintf(stderr, COLOR_RED "ERROR: File system not initialized. Run './exfs-log --init' first\n" COLOR_RESET);
+        fprintf(stderr, COLOR_RED "ERROR: File system not initialized. Run './exfs-log-structured-file-system --init' first\n" COLOR_RESET);
         return 1;
     }
 
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
     {
         if (argc < 5 || strcmp(argv[3], "-f") != 0)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Invalid add syntax. Use: ./exfs-log -a /path -f /host/file\n" COLOR_RESET);
+            fprintf(stderr, COLOR_RED "ERROR: Invalid add syntax. Use: ./exfs-log-structured-file-system -a /path -f /host/file\n" COLOR_RESET);
             return 1;
         }
 
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
     {
         if (argc < 3)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Invalid remove syntax. Use: ./exfs-log -r /path\n" COLOR_RESET);
+            fprintf(stderr, COLOR_RED "ERROR: Invalid remove syntax. Use: ./exfs-log-structured-file-system -r /path\n" COLOR_RESET);
             return 1;
         }
 
@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
     {
         if (argc < 3)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Invalid extract syntax. Use: ./exfs-log -e /path\n" COLOR_RESET);
+            fprintf(stderr, COLOR_RED "ERROR: Invalid extract syntax. Use: ./exfs-log-structured-file-system -e /path\n" COLOR_RESET);
             return 1;
         }
 
@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
     {
         if (argc < 3)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Invalid debug syntax. Use: ./exfs-log -D /path\n" COLOR_RESET);
+            fprintf(stderr, COLOR_RED "ERROR: Invalid debug syntax. Use: ./exfs-log-structured-file-system -D /path\n" COLOR_RESET);
             return 1;
         }
 

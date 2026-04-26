@@ -3,8 +3,7 @@
 #include "../imap/imap.h"
 #include "../utils/utils.h"
 
-// Simple counter for new inode numbers
-static uint32_t next_inode = 1;
+static uint32_t next_inode = 1; // Next free inode number (0 is root)
 
 // Create a new inode (file or directory)
 void inode_create(uint32_t *inode_num, uint32_t type)
@@ -41,7 +40,6 @@ void inode_read(uint32_t inode_num, struct inode *inode)
         printf("ERROR: Inode %d not found\n", inode_num);
         return;
     }
-
     fs_read(&loc, inode, sizeof(struct inode));
 }
 
@@ -70,9 +68,7 @@ void dir_add_entry(uint32_t dir_inode, const char *name, uint32_t child_inode)
     memset(entries, 0, sizeof(entries));
 
     if (dir.direct[0].segment_id != 0xFFFFFFFF)
-    {
         fs_read(&dir.direct[0], entries, BLOCK_SIZE);
-    }
 
     // Find an empty slot
     int slot = -1;
@@ -118,9 +114,7 @@ void dir_remove_entry(uint32_t dir_inode, const char *name)
     }
 
     if (dir.direct[0].segment_id == 0xFFFFFFFF)
-    {
         return; // Empty directory
-    }
 
     // Read directory entries
     struct directory_entry entries[DIR_ENTRIES_PER_BLOCK];
@@ -161,14 +155,10 @@ uint32_t dir_find_entry(uint32_t dir_inode, const char *name)
     inode_read(dir_inode, &dir);
 
     if (dir.type != TYPE_DIRECTORY)
-    {
         return 0;
-    }
 
     if (dir.direct[0].segment_id == 0xFFFFFFFF)
-    {
         return 0; // Empty directory
-    }
 
     struct directory_entry entries[DIR_ENTRIES_PER_BLOCK];
     fs_read(&dir.direct[0], entries, BLOCK_SIZE);
@@ -176,9 +166,7 @@ uint32_t dir_find_entry(uint32_t dir_inode, const char *name)
     for (int i = 0; i < DIR_ENTRIES_PER_BLOCK; i++)
     {
         if (entries[i].inode_num != 0 && strcmp(entries[i].name, name) == 0)
-        {
             return entries[i].inode_num;
-        }
     }
 
     return 0;
@@ -191,14 +179,10 @@ void dir_list_recursive(uint32_t dir_inode, int depth)
     inode_read(dir_inode, &dir);
 
     if (dir.type != TYPE_DIRECTORY)
-    {
         return;
-    }
 
     if (dir.direct[0].segment_id == 0xFFFFFFFF)
-    {
         return; // Empty directory
-    }
 
     struct directory_entry entries[DIR_ENTRIES_PER_BLOCK];
     fs_read(&dir.direct[0], entries, BLOCK_SIZE);
@@ -209,9 +193,7 @@ void dir_list_recursive(uint32_t dir_inode, int depth)
         {
             // Print indentation
             for (int d = 0; d < depth; d++)
-            {
                 printf("  ");
-            }
 
             struct inode child;
             inode_read(entries[i].inode_num, &child);
@@ -241,18 +223,15 @@ int inode_get_block_location(struct inode *inode, uint32_t block_num, struct loc
 
     block_num -= 10;
 
-    // Single indirect block (10 to 10+POINTERS_PER_BLOCK-1)
+    // Single indirect block (10 to 10+511)
     if (block_num < POINTERS_PER_BLOCK)
     {
         if (inode->single_indirect.segment_id == 0xFFFFFFFF)
-        {
             return 0;
-        }
 
         // Read the indirect block
         struct location indirect_block[POINTERS_PER_BLOCK];
         fs_read(&inode->single_indirect, indirect_block, BLOCK_SIZE);
-
         *loc = indirect_block[block_num];
         return (loc->segment_id != 0xFFFFFFFF);
     }
@@ -266,23 +245,18 @@ int inode_get_block_location(struct inode *inode, uint32_t block_num, struct loc
     if (first_level < POINTERS_PER_BLOCK)
     {
         if (inode->double_indirect.segment_id == 0xFFFFFFFF)
-        {
             return 0;
-        }
 
         // Read first level indirect block
         struct location first_level_block[POINTERS_PER_BLOCK];
         fs_read(&inode->double_indirect, first_level_block, BLOCK_SIZE);
 
         if (first_level_block[first_level].segment_id == 0xFFFFFFFF)
-        {
             return 0;
-        }
 
         // Read second level indirect block
         struct location second_level_block[POINTERS_PER_BLOCK];
         fs_read(&first_level_block[first_level], second_level_block, BLOCK_SIZE);
-
         *loc = second_level_block[second_level];
         return (loc->segment_id != 0xFFFFFFFF);
     }
@@ -298,32 +272,25 @@ int inode_get_block_location(struct inode *inode, uint32_t block_num, struct loc
     if (l1 < POINTERS_PER_BLOCK)
     {
         if (inode->triple_indirect.segment_id == 0xFFFFFFFF)
-        {
             return 0;
-        }
 
         // Read level 1
         struct location l1_block[POINTERS_PER_BLOCK];
         fs_read(&inode->triple_indirect, l1_block, BLOCK_SIZE);
 
         if (l1_block[l1].segment_id == 0xFFFFFFFF)
-        {
             return 0;
-        }
 
         // Read level 2
         struct location l2_block[POINTERS_PER_BLOCK];
         fs_read(&l1_block[l1], l2_block, BLOCK_SIZE);
 
         if (l2_block[l2].segment_id == 0xFFFFFFFF)
-        {
             return 0;
-        }
 
         // Read level 3
         struct location l3_block[POINTERS_PER_BLOCK];
         fs_read(&l2_block[l2], l3_block, BLOCK_SIZE);
-
         *loc = l3_block[l3];
         return (loc->segment_id != 0xFFFFFFFF);
     }
