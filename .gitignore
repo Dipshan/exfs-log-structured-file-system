@@ -29,3 +29,7 @@ checkpoint.bin
 
 # Compiled outputs
 build/
+
+segments/
+*.bin
+extracted*
