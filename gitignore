@@ -1,15 +1,18 @@
 # Executables
 exfs-log-structured-file-system
+exfs-log
+*.exe
+*.out
 
 # Build files
 *.o
 *.obj
-*.exe
-*.out
+*.d
 
 # File system data
 segments/
 *.bin
+checkpoint.bin
 *.txt
 
 # macOS specific
@@ -17,6 +20,8 @@ segments/
 .AppleDouble
 .LSOverride
 ._*
+*.swp
+*.swo
 
 # VSCode specific
 .vscode/
@@ -24,8 +29,6 @@ segments/
 
 # IDE files
 .idea/
-*.swp
-*.swo
 *~
 
 # Compiled outputs
