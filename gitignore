@@ -7,9 +7,10 @@ exfs-log-structured-file-system
 *.exe
 *.out
 
-# File system data (these are created at runtime)
+# File system data
 segments/
-checkpoint.bin
+*.bin
+*.txt
 
 # macOS specific
 .DS_Store
