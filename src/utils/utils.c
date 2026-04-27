@@ -1,9 +1,20 @@
+/**
+ * ExFS-Log: Log-Structured File System
+ * * utils.c
+ * Implements safe file stream wrappers to guarantee precise byte ingestion,
+ * and handles recursive path tokenization for directory tree traversal.
+ */
+
 #include "utils.h"
 #include "../fs/fs.h"
 #include "../inode/inode.h"
 #include "../imap/imap.h"
 
-// Read exactly 'bytes' from file, exit if fails
+/**
+ * safe_read
+ * Reads exactly 'bytes' from the file stream into the buffer.
+ * Defensively terminates the program if an I/O error or EOF prevents a full read.
+ */
 void safe_read(FILE *f, void *buffer, size_t bytes)
 {
     size_t n = fread(buffer, 1, bytes, f);
@@ -14,7 +25,11 @@ void safe_read(FILE *f, void *buffer, size_t bytes)
     }
 }
 
-// Write exactly 'bytes' to file, exit if fails
+/**
+ * safe_write
+ * Writes exactly 'bytes' from the buffer to the file stream.
+ * Defensively terminates the program if an I/O error prevents a full write.
+ */
 void safe_write(FILE *f, void *buffer, size_t bytes)
 {
     size_t n = fwrite(buffer, 1, bytes, f);
@@ -25,54 +40,72 @@ void safe_write(FILE *f, void *buffer, size_t bytes)
     }
 }
 
-// Split path into parent directory and last component
+/**
+ * split_path
+ * Parses a full path (e.g., "/docs/folder/file.txt") into its parent path 
+ * ("/docs/folder") and its final target name ("file.txt").
+ * Uses strncpy to defensively prevent buffer overflows.
+ */
 void split_path(const char *path, char *parent, char *name)
 {
     const char *last_slash = strrchr(path, '/');
 
+    // Case: No slashes found (e.g., "file.txt" in current directory)
     if (!last_slash)
     {
         strcpy(parent, ".");
-        strcpy(name, path);
+        strncpy(name, path, 251);
+        name[251] = '\0';
         return;
     }
 
-    // Copy everything before last slash
+    // Copy everything before the last slash into 'parent'
     size_t parent_len = last_slash - path;
     if (parent_len == 0)
     {
-        strcpy(parent, "/");
+        strcpy(parent, "/"); // The parent is exactly the root
     }
     else
     {
-        strncpy(parent, path, parent_len);
-        parent[parent_len] = '\0';
+        // Defensively truncate to avoid buffer overflows (assuming 1024 char limit)
+        size_t copy_len = (parent_len < 1023) ? parent_len : 1023;
+        strncpy(parent, path, copy_len);
+        parent[copy_len] = '\0';
     }
 
-    // Copy everything after last slash
-    strcpy(name, last_slash + 1);
+    // Copy everything after the last slash into 'name'
+    strncpy(name, last_slash + 1, 251);
+    name[251] = '\0';
 }
 
-// Find inode number for a given path
+/**
+ * find_inode
+ * Traverses the directory tree starting from the root to find the Inode ID
+ * associated with the provided path. Returns 0 if the path is invalid.
+ */
 uint32_t find_inode(const char *path)
 {
-    // Root is always inode 0
+    // Root directory is always rigidly assigned to Inode 0
     if (strcmp(path, "/") == 0)
     {
         return 0;
     }
 
+    // Create a modifiable, memory-safe copy of the path for tokenization
     char temp[1024];
-    strcpy(temp, path);
+    strncpy(temp, path, 1023);
+    temp[1023] = '\0';
 
     uint32_t current_inode = 0;
     char *token = strtok(temp, "/");
 
+    // Walk the directory tree token by token
     while (token)
     {
         uint32_t next_inode = dir_find_entry(current_inode, token);
         if (next_inode == 0)
-            return 0; // Not found
+            return 0; // Traversal failed; path does not exist
+        
         current_inode = next_inode;
         token = strtok(NULL, "/");
     }
@@ -80,43 +113,52 @@ uint32_t find_inode(const char *path)
     return current_inode;
 }
 
-// Check if a path exists
+/**
+ * path_exists
+ * Boolean wrapper. Returns 1 if the path corresponds to a valid Inode, 0 otherwise.
+ */
 int path_exists(const char *path)
 {
+    // find_inode returns 0 for root or invalid. Since root exists, handle edge case:
+    if (strcmp(path, "/") == 0) return 1;
     return find_inode(path) != 0;
 }
 
-// Create all parent directories for a path if they don't exist
+/**
+ * create_parent_dirs
+ * Recursively traverses a path backward, identifying missing directories 
+ * and generating new directory Inodes to satisfy the required path structure.
+ */
 void create_parent_dirs(const char *path)
 {
     char parent[1024], name[256];
     split_path(path, parent, name);
 
-    // No parent directories to create
+    // Base case: We have reached the root or current directory
     if (strcmp(parent, "/") == 0 || strcmp(parent, ".") == 0)
         return;
 
-    // If parent doesn't exist, create it
+    // If the parent directory is missing, recursively build it first
     if (!path_exists(parent))
     {
         create_parent_dirs(parent);
 
+        // Once the grandparent exists, we can link the new parent into it
         char grand_parent[1024], dir_name[256];
         split_path(parent, grand_parent, dir_name);
 
         uint32_t gp_inode = find_inode(grand_parent);
 
-        // FIX: We must allow gp_inode to be 0 IF the grandparent is the root directory ("/")
+        // Grandparent is permitted to be 0 ONLY if it is the root directory
         if (gp_inode == 0 && strcmp(grand_parent, "/") != 0)
         {
             printf("ERROR: Could not find/create parent %s\n", grand_parent);
             return;
         }
 
+        // Generate the missing directory Inode and map it to the grandparent
         uint32_t new_dir_inode;
         inode_create(&new_dir_inode, TYPE_DIRECTORY);
-
-        // Add the new directory to its grandparent
         dir_add_entry(gp_inode, dir_name, new_dir_inode);
     }
 }

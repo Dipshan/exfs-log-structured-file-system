@@ -1,24 +1,44 @@
+/**
+ * ExFS-Log: Log-Structured File System
+ * * utils.h
+ * Provides defensive I/O wrappers and path resolution utilities.
+ */
+
 #ifndef UTILS_H
 #define UTILS_H
 
 #include "../common.h"
 
-// Read exactly bytes from file, exit if error
+/**
+ * Reads exactly the requested number of bytes from a file stream.
+ * Exits the program if the read is incomplete.
+ */
 void safe_read(FILE *f, void *buffer, size_t bytes);
 
-// Write exactly bytes to file, exit if error
+/**
+ * Writes exactly the requested number of bytes to a file stream.
+ * Exits the program if the write is incomplete.
+ */
 void safe_write(FILE *f, void *buffer, size_t bytes);
 
-// Split path into parent directory and last component
+/**
+ * Splits a full file path into its parent directory and final component name.
+ */
 void split_path(const char *path, char *parent, char *name);
 
-// Find inode number for a path, returns 0 if not found
+/**
+ * Traverses the file system tree to locate the Inode number for a given path.
+ */
 uint32_t find_inode(const char *path);
 
-// Check if path exists, returns 1 if yes
+/**
+ * Checks if a specific path exists within the file system.
+ */
 int path_exists(const char *path);
 
-// Create all parent directories if they don't exist
+/**
+ * Recursively creates all missing parent directories for a given path.
+ */
 void create_parent_dirs(const char *path);
 
 #endif

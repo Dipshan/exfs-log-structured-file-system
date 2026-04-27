@@ -1,3 +1,12 @@
+/**
+ * ExFS-Log: Log-Structured File System
+ * * fs.c
+ * Core file system implementation. Handles segment I/O operations,
+ * checkpointing, file/directory addition, extraction, and garbage collection.
+ * As an LFS, all data (metadata and file data) is strictly appended to the 
+ * end of the active segment file to maximize write performance.
+ */
+
 #include "fs.h"
 #include "../inode/inode.h"
 #include "../imap/imap.h"
@@ -7,18 +16,22 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
-// Current state of our file system
+// --- System State Variables ---
 static struct checkpoint checkpoint;
 static FILE *current_file = NULL;
 static int is_mounted = 0;
 
-// Make full path for a segment file
+/**
+ * Helper: Constructs the string path for a given segment ID.
+ */
 static void get_segment_path(uint32_t id, char *path)
 {
     sprintf(path, "segments/segment%u.bin", id);
 }
 
-// Open current segment file at the right position for writing
+/**
+ * Helper: Opens the current active segment and seeks to the active write offset.
+ */
 static void open_current_segment(void)
 {
     char path[100];
@@ -37,7 +50,9 @@ static void open_current_segment(void)
     fseek(current_file, checkpoint.active_offset, SEEK_SET);
 }
 
-// Create a new empty segment file of exactly 1MB
+/**
+ * Helper: Generates a new, zeroed 1MB segment file on the host disk.
+ */
 static void create_segment(uint32_t id)
 {
     char path[100];
@@ -50,29 +65,32 @@ static void create_segment(uint32_t id)
         exit(1);
     }
 
-    // Make file exactly 1MB
+    // Force the file to instantly allocate 1MB of space
     fseek(f, SEGMENT_SIZE - 1, SEEK_SET);
     fputc(0, f);
     fclose(f);
 }
 
-// Initialize the file system
+/**
+ * Mounts the file system by loading the checkpoint region, or initializes 
+ * a completely fresh file system and root directory if none exists.
+ */
 void fs_init(void)
 {
     if (is_mounted)
         return;
 
-    // Create segments directory if needed
+    // Create segments directory (permissions: rwxr-xr-x)
     mkdir("segments", 0755);
     FILE *f = fopen("checkpoint.bin", "rb");
 
     if (f)
     {
-        // Load existing file system
+        // Load existing file system state
         safe_read(f, &checkpoint, sizeof(checkpoint));
         fclose(f);
 
-        // Initialize imap from checkpoint
+        // Initialize dynamic imap from the stored checkpoint location
         imap_init();
 
         open_current_segment();
@@ -82,22 +100,21 @@ void fs_init(void)
     }
     else
     {
-        // Create new file system
+        // Initialize fresh file system
         printf("Creating new file system...\n");
 
         checkpoint.active_segment = 0;
         checkpoint.active_offset = 0;
-        checkpoint.next_inode_num = 1; // 0 is reserved for root
+        checkpoint.next_inode_num = 1; // Inode 0 is strictly reserved for root
         checkpoint.imap_location.segment_id = 0xFFFFFFFF;
         checkpoint.imap_location.offset = 0;
 
         create_segment(0);
         open_current_segment();
 
-        // Initialize imap
         imap_init();
 
-        // Create root directory (inode 0)
+        // Generate the root directory (Inode 0)
         struct inode root;
         memset(&root, 0, sizeof(root));
         root.type = TYPE_DIRECTORY;
@@ -110,17 +127,13 @@ void fs_init(void)
         root.double_indirect.segment_id = 0xFFFFFFFF;
         root.triple_indirect.segment_id = 0xFFFFFFFF;
 
-        // Write root to log and update imap
+        // Write root to the log and immediately update the imap
         struct location root_loc;
         fs_append(&root, sizeof(root), &root_loc);
-
-        // Save where root is
         imap_update(0, &root_loc);
 
-        // Flush imap to segments
+        // Flush imap and save the initialization checkpoint
         imap_flush();
-
-        // Update checkpoint with imap location
         checkpoint.imap_location = imap_get_current_location();
         fs_write_checkpoint();
 
@@ -130,7 +143,10 @@ void fs_init(void)
     is_mounted = 1;
 }
 
-// Save checkpoint to checkpoint.bin
+/**
+ * Commits the current system state (active segment, active offset, imap location) 
+ * to the permanent checkpoint file.
+ */
 void fs_write_checkpoint(void)
 {
     FILE *f = fopen("checkpoint.bin", "wb");
@@ -144,7 +160,6 @@ void fs_write_checkpoint(void)
     fclose(f);
 }
 
-// Load checkpoint from checkpoint.bin
 void fs_read_checkpoint(void)
 {
     FILE *f = fopen("checkpoint.bin", "rb");
@@ -158,16 +173,18 @@ void fs_read_checkpoint(void)
     fclose(f);
 }
 
-// Append data to the end of the log
+/**
+ * Core LFS Append Protocol. 
+ * Writes raw data to the active offset. Automatically spans to a newly generated 
+ * segment file if the 1MB limit is breached.
+ */
 void fs_append(void *data, size_t size, struct location *loc)
 {
-    // Check if data fits in current segment
+    // Check if incoming data fits within the active segment limit
     if (checkpoint.active_offset + (int)size > SEGMENT_SIZE)
     {
-        // Current segment full - create new one
-        if (current_file)
-            fclose(current_file);
-
+        // FIX: Removed the standalone fclose() to prevent Linux double-free crashes.
+        // open_current_segment() automatically and safely closes the old file.
         checkpoint.active_segment++;
         checkpoint.active_offset = 0;
 
@@ -178,18 +195,16 @@ void fs_append(void *data, size_t size, struct location *loc)
         printf("Created new segment %d\n", checkpoint.active_segment);
     }
 
-    // Record where we wrote it
     loc->segment_id = checkpoint.active_segment;
     loc->offset = checkpoint.active_offset;
 
-    // Write the data
     fseek(current_file, checkpoint.active_offset, SEEK_SET);
     safe_write(current_file, data, size);
 
-    // Advance write head
+    fflush(current_file);
+
     checkpoint.active_offset += size;
 
-    // Save checkpoint every 5 writes (crash recovery)
     static int counter = 0;
     if (++counter >= 5)
     {
@@ -198,7 +213,9 @@ void fs_append(void *data, size_t size, struct location *loc)
     }
 }
 
-// Read data from specific location in log
+/**
+ * Retrieves raw data from a specific physical location in the log.
+ */
 void fs_read(struct location *loc, void *buffer, size_t size)
 {
     if (loc->segment_id == 0xFFFFFFFF)
@@ -222,51 +239,50 @@ void fs_read(struct location *loc, void *buffer, size_t size)
     fclose(f);
 }
 
-// Add a file from host to our file system
-void fs_add(const char *path, const char *source)
+/**
+ * Ingests a host file, fragments it into 4KB blocks, and appends the blocks,
+ * updating the parent directory structures accordingly.
+ */
+void fs_add(const char *target_dir, const char *source_file)
 {
-    // Open source file
-    FILE *host_file = fopen(source, "rb");
+    FILE *host_file = fopen(source_file, "rb");
     if (!host_file)
     {
-        printf("ERROR: Cannot open host file '%s'\n", source);
+        printf("ERROR: Cannot open host file '%s'\n", source_file);
         return;
     }
 
-    // Get file size
     fseek(host_file, 0, SEEK_END);
-    uint32_t file_size = ftell(host_file);
+    uint32_t file_size = (uint32_t)ftell(host_file);
     fseek(host_file, 0, SEEK_SET);
 
-    // Split path into parent directory and filename
-    char parent_path[1024], file_name[256];
-    split_path(path, parent_path, file_name);
+    // FIX: Extract the actual file name from the host machine's source path
+    char host_parent[1024], file_name[256];
+    split_path(source_file, host_parent, file_name);
 
-    // Create parent directories if they don't exist
-    if (strcmp(parent_path, "/") != 0 && !path_exists(parent_path))
-        create_parent_dirs(path);
-
-    // Get parent directory inode
-    uint32_t parent_inode = (strcmp(parent_path, "/") == 0) ? 0 : find_inode(parent_path);
-    if (parent_inode == 0 && strcmp(parent_path, "/") != 0)
+    // FIX: Force the creation of the full target directory structure
+    if (strcmp(target_dir, "/") != 0)
     {
-        printf("ERROR: Parent directory not found\n");
+        char dummy_path[1024];
+        snprintf(dummy_path, sizeof(dummy_path), "%s/dummy", target_dir);
+        create_parent_dirs(dummy_path);
+    }
+
+    uint32_t parent_inode = (strcmp(target_dir, "/") == 0) ? 0 : find_inode(target_dir);
+    if (parent_inode == 0 && strcmp(target_dir, "/") != 0)
+    {
+        printf("ERROR: Target directory not found\n");
         fclose(host_file);
         return;
     }
 
-    // Create new file inode
     uint32_t file_inode;
     inode_create(&file_inode, TYPE_FILE);
-
-    // Add entry to parent directory
     dir_add_entry(parent_inode, file_name, file_inode);
 
-    // Calculate total blocks needed
     uint32_t total_blocks = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-    // Read file and write data blocks
     char buffer[BLOCK_SIZE];
+
     struct inode inode;
     inode_read(file_inode, &inode);
 
@@ -276,15 +292,12 @@ void fs_add(const char *path, const char *source)
         if (bytes_read == 0)
             break;
 
-        // Pad last block with zeros
         if (bytes_read < BLOCK_SIZE)
             memset(buffer + bytes_read, 0, BLOCK_SIZE - bytes_read);
 
-        // Write data block to log
         struct location data_loc;
         fs_append(buffer, BLOCK_SIZE, &data_loc);
 
-        // Update inode block pointer (handles direct/indirect)
         if (!inode_set_block_location(&inode, block_num, &data_loc))
         {
             printf("ERROR: Failed to set block %d\n", block_num);
@@ -294,19 +307,26 @@ void fs_add(const char *path, const char *source)
 
     fclose(host_file);
 
-    // Update and save inode
     inode.size = file_size;
     inode_write(file_inode, &inode);
 
-    printf("Added '%s' (%u bytes, %u blocks)\n", path, file_size, total_blocks);
+    // Ensure clean printout of the new path
+    char full_fs_path[1024];
+    if (strcmp(target_dir, "/") == 0)
+        snprintf(full_fs_path, sizeof(full_fs_path), "/%s", file_name);
+    else
+        snprintf(full_fs_path, sizeof(full_fs_path), "%s/%s", target_dir, file_name);
 
-    // Persist imap and checkpoint
+    printf("Added '%s' (%u bytes, %u blocks)\n", full_fs_path, file_size, total_blocks);
+
     imap_flush();
     checkpoint.imap_location = imap_get_current_location();
     fs_write_checkpoint();
 }
 
-// Extract a file to stdout
+/**
+ * Reads a file's blocks sequentially and pipes the raw data to stdout.
+ */
 void fs_extract(const char *path)
 {
     uint32_t inode_num = find_inode(path);
@@ -325,10 +345,10 @@ void fs_extract(const char *path)
         return;
     }
 
-    // Read and output each block (handles indirect blocks)
     uint32_t bytes_remaining = inode.size, block_num = 0;
     char buffer[BLOCK_SIZE];
 
+    // Read and pipe data via stdout until EOF
     while (bytes_remaining > 0)
     {
         struct location data_loc;
@@ -346,7 +366,9 @@ void fs_extract(const char *path)
     }
 }
 
-// Remove a file or directory
+/**
+ * Removes a file or recursively destroys a directory. 
+ */
 void fs_remove(const char *path)
 {
     uint32_t inode_num = find_inode(path);
@@ -356,7 +378,6 @@ void fs_remove(const char *path)
         return;
     }
 
-    // Split path to get parent
     char parent_path[1024], name[256];
     split_path(path, parent_path, name);
 
@@ -370,12 +391,11 @@ void fs_remove(const char *path)
     struct inode inode;
     inode_read(inode_num, &inode);
 
-    // If it's a directory, remove all contents first
+    // Recursively handle sub-directories
     if (inode.type == TYPE_DIRECTORY)
     {
         printf("Removing directory '%s' and all contents\n", path);
 
-        // Read directory entries
         if (inode.direct[0].segment_id != 0xFFFFFFFF)
         {
             struct directory_entry entries[DIR_ENTRIES_PER_BLOCK];
@@ -396,52 +416,70 @@ void fs_remove(const char *path)
         }
     }
 
-    // Remove entry from parent directory
     dir_remove_entry(parent_inode, name);
     printf("Removed '%s'\n", path);
 
-    // Flush the in-memory index and save the checkpoint before exiting
     imap_flush();
     checkpoint.imap_location = imap_get_current_location();
     fs_write_checkpoint();
 }
 
-// List entire file system tree
 void fs_list(void)
 {
     printf("/ (root)\n");
     dir_list_recursive(0, 1);
 }
 
-// Cleaner implementation - compacts live data, deletes old segments, updates checkpoint
+/**
+ * LFS Garbage Collector.
+ * Scans the entire file system for "live" data blocks. Migrates live data to 
+ * the active segment, then permanently deletes older segments containing "dead" data
+ * to optimize and reclaim host disk space.
+ */
 void fs_cleaner(void)
 {
     printf("\n----- CLEANER -----\n");
     printf("Current active segment: %d\n", checkpoint.active_segment);
     printf("Current write offset: %d\n\n", checkpoint.active_offset);
 
-    // Step 1: Get all live inode locations from imap
+    // Memorize the segment we started on so we don't delete freshly migrated data
+    uint32_t starting_segment = checkpoint.active_segment;
+
+    // Step 1: Sweep the imap for all active, live inodes
     struct location live_inodes[10000];
+    uint32_t live_inode_nums[10000]; 
     uint32_t live_count = 0;
 
-    // Collect all live inodes
-    for (uint32_t i = 0; i <= checkpoint.next_inode_num; i++)
+    for (uint32_t i = 0; i < 10000; i++)
     {
         struct location loc = imap_lookup(i);
         if (loc.segment_id != 0xFFFFFFFF)
-            live_inodes[live_count++] = loc;
+        {
+            live_inodes[live_count] = loc;
+            live_inode_nums[live_count] = i; 
+            live_count++;
+        }
     }
     printf("Live inodes: %u\n", live_count);
 
-    // Step 2: For each live inode, collect all its data blocks
-    struct location live_blocks[100000];
-    uint32_t block_count = 0;
+    // OPTIMIZATION: Dynamically allocate massive tracking arrays on the Heap 
+    // to prevent stack overflows on strict Linux operating systems.
+    struct location *live_blocks = malloc(100000 * sizeof(struct location));
+    struct location *new_block_locations = malloc(100000 * sizeof(struct location));
+    if (!live_blocks || !new_block_locations) {
+        printf("ERROR: Critical memory allocation failure during cleanup phase.\n");
+        exit(1);
+    }
 
+    // Step 2: Iterate through every live inode and extract valid data block pointers
+    uint32_t block_count = 0;
     for (uint32_t i = 0; i < live_count; i++)
     {
         struct inode inode;
         fs_read(&live_inodes[i], &inode, sizeof(inode));
-        uint32_t num_blocks = (inode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        
+        // Force directory entries to yield 1 block, otherwise they compute as size 0
+        uint32_t num_blocks = (inode.type == TYPE_DIRECTORY) ? 1 : (inode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
         for (uint32_t b = 0; b < num_blocks; b++)
         {
@@ -453,7 +491,7 @@ void fs_cleaner(void)
     }
     printf("Live blocks: %u\n", block_count);
 
-    // Step 3: Copy live data to new segments
+    // Step 3: Migrate live inodes to the fresh tail of the log
     struct location new_inode_locations[10000];
     for (uint32_t i = 0; i < live_count; i++)
     {
@@ -462,8 +500,7 @@ void fs_cleaner(void)
         fs_append(&inode, sizeof(inode), &new_inode_locations[i]);
     }
 
-    // Step 4: Copy all live data blocks to new log location
-    struct location new_block_locations[100000];
+    // Step 4: Migrate live data blocks to the fresh tail of the log
     for (uint32_t i = 0; i < block_count; i++)
     {
         char buffer[BLOCK_SIZE];
@@ -471,36 +508,34 @@ void fs_cleaner(void)
         fs_append(buffer, BLOCK_SIZE, &new_block_locations[i]);
     }
 
-    // Step 5: Update inodes with new block locations
-    // Rebuild mapping from old to new locations
-    // For simplicity, we update each inode's block pointers
+    // Step 5: Re-link newly migrated block pointers to their newly migrated inodes
     uint32_t block_idx = 0;
     for (uint32_t i = 0; i < live_count; i++)
     {
         struct inode inode;
         fs_read(&live_inodes[i], &inode, sizeof(inode));
-        uint32_t num_blocks = (inode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        
+        uint32_t num_blocks = (inode.type == TYPE_DIRECTORY) ? 1 : (inode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-        // Create new inode with updated block pointers
         struct inode new_inode;
         memcpy(&new_inode, &inode, sizeof(inode));
 
-        // Reset block pointers
+        // Purge old block pointers
         for (int j = 0; j < 10; j++)
             new_inode.direct[j].segment_id = 0xFFFFFFFF;
         new_inode.single_indirect.segment_id = 0xFFFFFFFF;
         new_inode.double_indirect.segment_id = 0xFFFFFFFF;
         new_inode.triple_indirect.segment_id = 0xFFFFFFFF;
 
-        // Set new block pointers (creates indirect blocks as needed)
+        // Assign new pointers
         for (uint32_t b = 0; b < num_blocks; b++)
             inode_set_block_location(&new_inode, b, &new_block_locations[block_idx++]);
 
-        // Write updated inode
-        inode_write(i, &new_inode);
+        // Commit updated inode using its correct identity ID
+        inode_write(live_inode_nums[i], &new_inode);
     }
 
-    // Step 6: Delete old segment files (keep current active)
+    // Step 6: Prune old segment files (Delete data written before the cleaner started)
     DIR *dir = opendir("segments");
     if (dir)
     {
@@ -513,8 +548,8 @@ void fs_cleaner(void)
             uint32_t seg_id;
             sscanf(entry->d_name, "segment%u.bin", &seg_id);
 
-            // Don't delete the new active segment(s)
-            if (seg_id != checkpoint.active_segment)
+            // Delete dead segments, preserve newly written active segments
+            if (seg_id < starting_segment)
             {
                 char path[100];
                 sprintf(path, "segments/%s", entry->d_name);
@@ -524,7 +559,11 @@ void fs_cleaner(void)
         closedir(dir);
     }
 
-    // Step 7: Flush imap and update checkpoint
+    // Free heap memory allocations
+    free(live_blocks);
+    free(new_block_locations);
+
+    // Step 7: Flush new states to persistent checkpoint
     imap_flush();
     checkpoint.imap_location = imap_get_current_location();
     fs_write_checkpoint();
@@ -532,7 +571,6 @@ void fs_cleaner(void)
     printf("----- CLEANER COMPLETE -----\n");
 }
 
-// Debug mode - shows inode details, block pointers, directory entries (-D)
 void fs_debug(const char *path)
 {
     uint32_t inode_num = find_inode(path);
@@ -551,7 +589,6 @@ void fs_debug(const char *path)
            inode.type == TYPE_FILE ? "FILE" : "DIRECTORY",
            inode.size);
 
-    // Print direct block pointers
     printf("\nDirect blocks:\n");
     int has_blocks = 0;
     for (int i = 0; i < 10; i++)
@@ -566,13 +603,11 @@ void fs_debug(const char *path)
     if (!has_blocks)
         printf("  (none)\n");
 
-    // Print indirect block status
     printf("\nIndirect:\n  Single: %s\n  Double: %s\n  Triple: %s\n",
            inode.single_indirect.segment_id != 0xFFFFFFFF ? "yes" : "no",
            inode.double_indirect.segment_id != 0xFFFFFFFF ? "yes" : "no",
            inode.triple_indirect.segment_id != 0xFFFFFFFF ? "yes" : "no");
 
-    // If directory, list its contents
     if (inode.type == TYPE_DIRECTORY && inode.direct[0].segment_id != 0xFFFFFFFF)
     {
         printf("\nDirectory contents:\n");
@@ -586,7 +621,6 @@ void fs_debug(const char *path)
         }
     }
 
-    // Print location in log
     struct location loc = imap_lookup(inode_num);
     printf("\nLog location: seg %d, off %d\n\n", loc.segment_id, loc.offset);
 }
