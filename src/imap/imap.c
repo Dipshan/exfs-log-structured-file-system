@@ -1,29 +1,30 @@
-/**
- * ExFS-Log: Log-Structured File System
- * * imap.c
- * Manages the high-speed RAM cache for Inode locations and handles 
- * flushing the mapping table down to persistent storage.
- */
+// Filename: imap.c
+// Manages the in-memory cache for Inode locations and handles
+// flushing the mapping table to persistent segment storage.
 
-#include "imap.h"
-#include "../fs/fs.h"
-#include "../utils/utils.h"
+#include "imap.h"           // For imap structs and constants
+#include "../fs/fs.h"       // For fs_read, fs_append
+#include "../utils/utils.h" // For safe_read
 
-// System bounded to 512 to prevent cache-to-disk persistence loss
+// Maximum inodes supported (512 to match one 4KB chunk)
 #define MAX_SYSTEM_INODES IMAP_CHUNK_SIZE
 
+// In-memory cache: inode number -> physical location
 static struct location imap_cache[MAX_SYSTEM_INODES];
+
+// Highest inode number currently in use
 static uint32_t max_inode = 0;
-static struct location current_imap_location; 
+
+// Where the latest imap chunk lives in the log
+static struct location current_imap_location;
+
+// Set to 1 if cache has unsaved changes
 static int imap_dirty = 0;
 
-/**
- * Boots the Imap. Loads the persistent chunk from the disk if a checkpoint 
- * exists, otherwise initializes a blank cache for a fresh mount.
- */
+// Loads imap from checkpoint if exists, otherwise initializes empty cache
 void imap_init(void)
 {
-    memset(imap_cache, 0xFF, sizeof(imap_cache)); // 0xFFFFFFFF represents an invalid/empty state
+    memset(imap_cache, 0xFF, sizeof(imap_cache)); // 0xFFFFFFFF means invalid/empty location
     max_inode = 0;
 
     struct checkpoint chk;
@@ -40,7 +41,7 @@ void imap_init(void)
             struct imap_chunk chunk;
             fs_read(&current_imap_location, &chunk, sizeof(chunk));
 
-            // Safely populate the RAM cache from the disk chunk
+            // Load chunk into cache
             for (int i = 0; i < IMAP_CHUNK_SIZE && (chunk.start_inode + i) < MAX_SYSTEM_INODES; i++)
             {
                 imap_cache[chunk.start_inode + i] = chunk.mappings[i];
@@ -51,19 +52,17 @@ void imap_init(void)
     }
 }
 
-/**
- * Commits the volatile RAM cache into a 4KB chunk and appends it to the log.
- */
+// Writes entire imap cache to a 4KB chunk and appends to log
 void imap_flush(void)
 {
     struct imap_chunk chunk;
     chunk.start_inode = 0;
 
-    // Pack valid inodes
+    // Copy valid mappings
     for (int i = 0; i < IMAP_CHUNK_SIZE && i <= max_inode; i++)
         chunk.mappings[i] = imap_cache[i];
 
-    // Pad remaining slots with invalid markers
+    // Pad remaining with invalid markers
     for (int i = max_inode + 1; i < IMAP_CHUNK_SIZE; i++)
     {
         chunk.mappings[i].segment_id = 0xFFFFFFFF;
@@ -74,11 +73,13 @@ void imap_flush(void)
     imap_dirty = 0;
 }
 
+// Returns current segment/offset where imap is stored
 struct location imap_get_current_location(void)
 {
     return current_imap_location;
 }
 
+// Updates cache with new location for an inode
 void imap_update(uint32_t inode_num, struct location *loc)
 {
     if (inode_num >= MAX_SYSTEM_INODES)
@@ -93,7 +94,7 @@ void imap_update(uint32_t inode_num, struct location *loc)
     if (inode_num > max_inode)
         max_inode = inode_num;
 
-    // Persist every 10 updates to balance I/O overhead with crash safety
+    // Flush every 10 updates for crash safety
     static int update_counter = 0;
     if (++update_counter >= 10)
     {
@@ -102,6 +103,7 @@ void imap_update(uint32_t inode_num, struct location *loc)
     }
 }
 
+// Returns physical location of an inode, or invalid if not found
 struct location imap_lookup(uint32_t inode_num)
 {
     struct location empty = {0xFFFFFFFF, 0};

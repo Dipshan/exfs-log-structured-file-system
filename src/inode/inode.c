@@ -1,23 +1,16 @@
-/**
- * ExFS-Log: Log-Structured File System
- * * inode.c
- * Manages the allocation, modification, and persistence of Inodes.
- * Implements the LFS Cascading Copy-on-Write mechanism for indirect 
- * block pointer traversal and directory entry management.
- */
+// Filename: inode.c
+// Manages inode allocation, modification, and persistence.
+// Implements indirect block traversal and directory entry management.
 
-#include "inode.h"
-#include "../fs/fs.h"
-#include "../imap/imap.h"
-#include "../utils/utils.h"
+#include "inode.h"          // For inode struct and directory_entry
+#include "../fs/fs.h"       // For fs_read, fs_append
+#include "../imap/imap.h"   // For imap_lookup, imap_update
+#include "../utils/utils.h" // For safe I/O
 
-/**
- * Allocates a new Inode by dynamically scanning the Imap for the next 
- * available ID, ensuring persistence and preventing overwrite collisions 
- * after a system reboot.
- */
+// Finds next free inode number by scanning imap
 void inode_create(uint32_t *inode_num, uint32_t type)
 {
+    // Start from 1 (0 is root) and find first unused inode number
     uint32_t next_inode = 1;
     while (imap_lookup(next_inode).segment_id != 0xFFFFFFFF)
     {
@@ -25,12 +18,13 @@ void inode_create(uint32_t *inode_num, uint32_t type)
     }
     *inode_num = next_inode;
 
+    // Initialize new inode with zeros
     struct inode inode;
     memset(&inode, 0, sizeof(inode));
     inode.type = type;
     inode.size = 0;
 
-    // Initialize all pointers to an invalid state (0xFFFFFFFF)
+    // Set all block pointers to invalid (0xFFFFFFFF means empty)
     for (int i = 0; i < 10; i++)
     {
         inode.direct[i].segment_id = 0xFFFFFFFF;
@@ -40,12 +34,13 @@ void inode_create(uint32_t *inode_num, uint32_t type)
     inode.double_indirect.segment_id = 0xFFFFFFFF;
     inode.triple_indirect.segment_id = 0xFFFFFFFF;
 
+    // Append inode to log and update imap
     struct location loc;
     fs_append(&inode, sizeof(inode), &loc);
-
     imap_update(*inode_num, &loc);
 }
 
+// Reads inode from disk using imap to find its location
 void inode_read(uint32_t inode_num, struct inode *inode)
 {
     struct location loc = imap_lookup(inode_num);
@@ -57,10 +52,7 @@ void inode_read(uint32_t inode_num, struct inode *inode)
     fs_read(&loc, inode, sizeof(struct inode));
 }
 
-/**
- * In an LFS, modifying an inode means writing a completely new version 
- * to the tail of the log and updating the Imap.
- */
+// Writes new version of inode to log tail and updates imap
 void inode_write(uint32_t inode_num, struct inode *inode)
 {
     struct location new_loc;
@@ -68,23 +60,28 @@ void inode_write(uint32_t inode_num, struct inode *inode)
     imap_update(inode_num, &new_loc);
 }
 
+// Adds a directory entry (name -> inode number) to a directory
 void dir_add_entry(uint32_t dir_inode, const char *name, uint32_t child_inode)
 {
+    // Read the directory inode
     struct inode dir;
     inode_read(dir_inode, &dir);
 
+    // Verify it's actually a directory
     if (dir.type != TYPE_DIRECTORY)
     {
         printf("ERROR: Inode %d is not a directory\n", dir_inode);
         return;
     }
 
+    // Read existing directory entries (or initialize empty array)
     struct directory_entry entries[DIR_ENTRIES_PER_BLOCK];
     memset(entries, 0, sizeof(entries));
 
     if (dir.direct[0].segment_id != 0xFFFFFFFF)
         fs_read(&dir.direct[0], entries, BLOCK_SIZE);
 
+    // Find an empty slot in the directory
     int slot = -1;
     for (int i = 0; i < DIR_ENTRIES_PER_BLOCK; i++)
     {
@@ -101,28 +98,36 @@ void dir_add_entry(uint32_t dir_inode, const char *name, uint32_t child_inode)
         return;
     }
 
+    // Add the new entry
     strncpy(entries[slot].name, name, 251);
     entries[slot].name[251] = '\0';
     entries[slot].inode_num = child_inode;
 
+    // Write updated directory block to log
     struct location new_data_loc;
     fs_append(entries, BLOCK_SIZE, &new_data_loc);
 
+    // Update directory inode to point to new block
     dir.direct[0] = new_data_loc;
     inode_write(dir_inode, &dir);
 }
 
+// Removes a directory entry by name
 void dir_remove_entry(uint32_t dir_inode, const char *name)
 {
+    // Read directory inode
     struct inode dir;
     inode_read(dir_inode, &dir);
 
+    // Exit if not a directory or has no data block
     if (dir.type != TYPE_DIRECTORY || dir.direct[0].segment_id == 0xFFFFFFFF)
         return;
 
+    // Read directory entries
     struct directory_entry entries[DIR_ENTRIES_PER_BLOCK];
     fs_read(&dir.direct[0], entries, BLOCK_SIZE);
 
+    // Find and clear the matching entry
     int found = 0;
     for (int i = 0; i < DIR_ENTRIES_PER_BLOCK; i++)
     {
@@ -141,21 +146,27 @@ void dir_remove_entry(uint32_t dir_inode, const char *name)
         return;
     }
 
+    // Write updated directory block to log
     struct location new_data_loc;
     fs_append(entries, BLOCK_SIZE, &new_data_loc);
 
+    // Update directory inode
     dir.direct[0] = new_data_loc;
     inode_write(dir_inode, &dir);
 }
 
+// Finds entry by name, returns inode number or 0 if not found
 uint32_t dir_find_entry(uint32_t dir_inode, const char *name)
 {
+    // Read directory inode
     struct inode dir;
     inode_read(dir_inode, &dir);
 
+    // Exit if not a directory or has no data block
     if (dir.type != TYPE_DIRECTORY || dir.direct[0].segment_id == 0xFFFFFFFF)
         return 0;
 
+    // Read directory entries and search for name
     struct directory_entry entries[DIR_ENTRIES_PER_BLOCK];
     fs_read(&dir.direct[0], entries, BLOCK_SIZE);
 
@@ -165,50 +176,56 @@ uint32_t dir_find_entry(uint32_t dir_inode, const char *name)
             return entries[i].inode_num;
     }
 
-    return 0;
+    return 0; // Not found
 }
 
+// Recursively prints directory tree with indentation for depth
 void dir_list_recursive(uint32_t dir_inode, int depth)
 {
+    // Read directory inode
     struct inode dir;
     inode_read(dir_inode, &dir);
 
+    // Exit if not a directory or has no data block
     if (dir.type != TYPE_DIRECTORY || dir.direct[0].segment_id == 0xFFFFFFFF)
         return;
 
+    // Read directory entries
     struct directory_entry entries[DIR_ENTRIES_PER_BLOCK];
     fs_read(&dir.direct[0], entries, BLOCK_SIZE);
 
+    // Iterate through all entries
     for (int i = 0; i < DIR_ENTRIES_PER_BLOCK; i++)
     {
         if (entries[i].inode_num != 0)
         {
+            // Print indentation based on depth
             for (int d = 0; d < depth; d++)
                 printf("  ");
 
+            // Read child inode to determine type
             struct inode child;
             inode_read(entries[i].inode_num, &child);
 
             if (child.type == TYPE_DIRECTORY)
             {
+                // Print directory and recurse
                 printf("%s/ (inode %d)\n", entries[i].name, entries[i].inode_num);
                 dir_list_recursive(entries[i].inode_num, depth + 1);
             }
             else
             {
+                // Print file with size
                 printf("%s (inode %d, %d bytes)\n", entries[i].name, entries[i].inode_num, child.size);
             }
         }
     }
 }
 
-/**
- * Resolves logical block indices into physical LFS locations.
- * Traverses the indirect block pointer tree (O(1) to O(4) depth).
- */
+// Gets block location - handles direct, single, double, and triple indirect blocks
 int inode_get_block_location(struct inode *inode, uint32_t block_num, struct location *loc)
 {
-    // Direct Blocks (0-9)
+    // Case 1: Direct blocks (block numbers 0 through 9)
     if (block_num < 10)
     {
         *loc = inode->direct[block_num];
@@ -216,10 +233,11 @@ int inode_get_block_location(struct inode *inode, uint32_t block_num, struct loc
     }
     block_num -= 10;
 
-    // Single Indirect
+    // Case 2: Single indirect block (block numbers 10 through 10+511)
     if (block_num < POINTERS_PER_BLOCK)
     {
-        if (inode->single_indirect.segment_id == 0xFFFFFFFF) return 0;
+        if (inode->single_indirect.segment_id == 0xFFFFFFFF)
+            return 0;
 
         struct location indirect_block[POINTERS_PER_BLOCK];
         fs_read(&inode->single_indirect, indirect_block, BLOCK_SIZE);
@@ -228,18 +246,19 @@ int inode_get_block_location(struct inode *inode, uint32_t block_num, struct loc
     }
     block_num -= POINTERS_PER_BLOCK;
 
-    // Double Indirect
+    // Case 3: Double indirect block (block numbers beyond single indirect)
     uint32_t first_level = block_num / POINTERS_PER_BLOCK;
     uint32_t second_level = block_num % POINTERS_PER_BLOCK;
 
     if (first_level < POINTERS_PER_BLOCK)
     {
-        if (inode->double_indirect.segment_id == 0xFFFFFFFF) return 0;
+        if (inode->double_indirect.segment_id == 0xFFFFFFFF)
+            return 0;
 
         struct location first_level_block[POINTERS_PER_BLOCK];
         fs_read(&inode->double_indirect, first_level_block, BLOCK_SIZE);
-
-        if (first_level_block[first_level].segment_id == 0xFFFFFFFF) return 0;
+        if (first_level_block[first_level].segment_id == 0xFFFFFFFF)
+            return 0;
 
         struct location second_level_block[POINTERS_PER_BLOCK];
         fs_read(&first_level_block[first_level], second_level_block, BLOCK_SIZE);
@@ -248,99 +267,7 @@ int inode_get_block_location(struct inode *inode, uint32_t block_num, struct loc
     }
     block_num -= (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
 
-    // Triple Indirect
-    uint32_t l1 = block_num / (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
-    uint32_t rem = block_num % (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
-    uint32_t l2 = rem / POINTERS_PER_BLOCK;
-    uint32_t l3 = rem % POINTERS_PER_BLOCK;
-
-    if (l1 < POINTERS_PER_BLOCK)
-    {
-        if (inode->triple_indirect.segment_id == 0xFFFFFFFF) return 0;
-
-        struct location l1_block[POINTERS_PER_BLOCK];
-        fs_read(&inode->triple_indirect, l1_block, BLOCK_SIZE);
-        if (l1_block[l1].segment_id == 0xFFFFFFFF) return 0;
-
-        struct location l2_block[POINTERS_PER_BLOCK];
-        fs_read(&l1_block[l1], l2_block, BLOCK_SIZE);
-        if (l2_block[l2].segment_id == 0xFFFFFFFF) return 0;
-
-        struct location l3_block[POINTERS_PER_BLOCK];
-        fs_read(&l2_block[l2], l3_block, BLOCK_SIZE);
-        *loc = l3_block[l3];
-        return (loc->segment_id != 0xFFFFFFFF);
-    }
-    return 0; 
-}
-
-/**
- * Cascading Copy-on-Write:
- * Assigns a physical address to a logical block. If an indirect tree is required, 
- * this function recursively spawns new pointer blocks, modifies them, and appends 
- * the newly modified parent blocks to the tail of the log to ensure LFS persistence.
- */
-int inode_set_block_location(struct inode *inode, uint32_t block_num, struct location *loc)
-{
-    // Direct
-    if (block_num < 10)
-    {
-        inode->direct[block_num] = *loc;
-        return 1;
-    }
-    block_num -= 10;
-
-    // Single Indirect
-    if (block_num < POINTERS_PER_BLOCK)
-    {
-        if (inode->single_indirect.segment_id == 0xFFFFFFFF)
-        {
-            struct location empty_block[POINTERS_PER_BLOCK];
-            memset(empty_block, 0xFF, sizeof(empty_block));
-            fs_append(empty_block, BLOCK_SIZE, &inode->single_indirect);
-        }
-
-        struct location indirect_block[POINTERS_PER_BLOCK];
-        fs_read(&inode->single_indirect, indirect_block, BLOCK_SIZE);
-        indirect_block[block_num] = *loc;
-        fs_append(indirect_block, BLOCK_SIZE, &inode->single_indirect);
-        return 1;
-    }
-    block_num -= POINTERS_PER_BLOCK;
-
-    // Double Indirect
-    uint32_t first_level = block_num / POINTERS_PER_BLOCK;
-    uint32_t second_level = block_num % POINTERS_PER_BLOCK;
-
-    if (first_level < POINTERS_PER_BLOCK)
-    {
-        if (inode->double_indirect.segment_id == 0xFFFFFFFF)
-        {
-            struct location empty_block[POINTERS_PER_BLOCK];
-            memset(empty_block, 0xFF, sizeof(empty_block));
-            fs_append(empty_block, BLOCK_SIZE, &inode->double_indirect);
-        }
-
-        struct location first_level_block[POINTERS_PER_BLOCK];
-        fs_read(&inode->double_indirect, first_level_block, BLOCK_SIZE);
-
-        if (first_level_block[first_level].segment_id == 0xFFFFFFFF)
-        {
-            struct location empty_block[POINTERS_PER_BLOCK];
-            memset(empty_block, 0xFF, sizeof(empty_block));
-            fs_append(empty_block, BLOCK_SIZE, &first_level_block[first_level]);
-        }
-
-        struct location second_level_block[POINTERS_PER_BLOCK];
-        fs_read(&first_level_block[first_level], second_level_block, BLOCK_SIZE);
-        second_level_block[second_level] = *loc;
-        fs_append(second_level_block, BLOCK_SIZE, &first_level_block[first_level]);
-        fs_append(first_level_block, BLOCK_SIZE, &inode->double_indirect);
-        return 1;
-    }
-    block_num -= (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
-
-    // Triple Indirect
+    // Case 4: Triple indirect block (very large files)
     uint32_t l1 = block_num / (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
     uint32_t rem = block_num % (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
     uint32_t l2 = rem / POINTERS_PER_BLOCK;
@@ -349,15 +276,116 @@ int inode_set_block_location(struct inode *inode, uint32_t block_num, struct loc
     if (l1 < POINTERS_PER_BLOCK)
     {
         if (inode->triple_indirect.segment_id == 0xFFFFFFFF)
+            return 0;
+
+        struct location l1_block[POINTERS_PER_BLOCK];
+        fs_read(&inode->triple_indirect, l1_block, BLOCK_SIZE);
+        if (l1_block[l1].segment_id == 0xFFFFFFFF)
+            return 0;
+
+        struct location l2_block[POINTERS_PER_BLOCK];
+        fs_read(&l1_block[l1], l2_block, BLOCK_SIZE);
+        if (l2_block[l2].segment_id == 0xFFFFFFFF)
+            return 0;
+
+        struct location l3_block[POINTERS_PER_BLOCK];
+        fs_read(&l2_block[l2], l3_block, BLOCK_SIZE);
+        *loc = l3_block[l3];
+        return (loc->segment_id != 0xFFFFFFFF);
+    }
+    return 0; // Block number out of range
+}
+
+// Sets block location - creates indirect blocks automatically as needed (copy-on-write)
+int inode_set_block_location(struct inode *inode, uint32_t block_num, struct location *loc)
+{
+    // Case 1: Direct blocks (block numbers 0 through 9)
+    if (block_num < 10)
+    {
+        inode->direct[block_num] = *loc;
+        return 1;
+    }
+    block_num -= 10;
+
+    // Case 2: Single indirect block
+    if (block_num < POINTERS_PER_BLOCK)
+    {
+        // Create single indirect block if it doesn't exist
+        if (inode->single_indirect.segment_id == 0xFFFFFFFF)
+        {
+            struct location empty_block[POINTERS_PER_BLOCK];
+            memset(empty_block, 0xFF, sizeof(empty_block));
+            fs_append(empty_block, BLOCK_SIZE, &inode->single_indirect);
+        }
+
+        // Read, modify, and write back the indirect block
+        struct location indirect_block[POINTERS_PER_BLOCK];
+        fs_read(&inode->single_indirect, indirect_block, BLOCK_SIZE);
+        indirect_block[block_num] = *loc;
+        fs_append(indirect_block, BLOCK_SIZE, &inode->single_indirect);
+        return 1;
+    }
+    block_num -= POINTERS_PER_BLOCK;
+
+    // Case 3: Double indirect block
+    uint32_t first_level = block_num / POINTERS_PER_BLOCK;
+    uint32_t second_level = block_num % POINTERS_PER_BLOCK;
+
+    if (first_level < POINTERS_PER_BLOCK)
+    {
+        // Create double indirect block if it doesn't exist
+        if (inode->double_indirect.segment_id == 0xFFFFFFFF)
+        {
+            struct location empty_block[POINTERS_PER_BLOCK];
+            memset(empty_block, 0xFF, sizeof(empty_block));
+            fs_append(empty_block, BLOCK_SIZE, &inode->double_indirect);
+        }
+
+        // Read first level indirect block
+        struct location first_level_block[POINTERS_PER_BLOCK];
+        fs_read(&inode->double_indirect, first_level_block, BLOCK_SIZE);
+
+        // Create second level if needed
+        if (first_level_block[first_level].segment_id == 0xFFFFFFFF)
+        {
+            struct location empty_block[POINTERS_PER_BLOCK];
+            memset(empty_block, 0xFF, sizeof(empty_block));
+            fs_append(empty_block, BLOCK_SIZE, &first_level_block[first_level]);
+        }
+
+        // Read, modify, and write second level
+        struct location second_level_block[POINTERS_PER_BLOCK];
+        fs_read(&first_level_block[first_level], second_level_block, BLOCK_SIZE);
+        second_level_block[second_level] = *loc;
+        fs_append(second_level_block, BLOCK_SIZE, &first_level_block[first_level]);
+
+        // Write back first level
+        fs_append(first_level_block, BLOCK_SIZE, &inode->double_indirect);
+        return 1;
+    }
+    block_num -= (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
+
+    // Case 4: Triple indirect block (very large files)
+    uint32_t l1 = block_num / (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
+    uint32_t rem = block_num % (POINTERS_PER_BLOCK * POINTERS_PER_BLOCK);
+    uint32_t l2 = rem / POINTERS_PER_BLOCK;
+    uint32_t l3 = rem % POINTERS_PER_BLOCK;
+
+    if (l1 < POINTERS_PER_BLOCK)
+    {
+        // Create triple indirect block if it doesn't exist
+        if (inode->triple_indirect.segment_id == 0xFFFFFFFF)
         {
             struct location empty_block[POINTERS_PER_BLOCK];
             memset(empty_block, 0xFF, sizeof(empty_block));
             fs_append(empty_block, BLOCK_SIZE, &inode->triple_indirect);
         }
 
+        // Read level 1
         struct location l1_block[POINTERS_PER_BLOCK];
         fs_read(&inode->triple_indirect, l1_block, BLOCK_SIZE);
 
+        // Create level 2 if needed
         if (l1_block[l1].segment_id == 0xFFFFFFFF)
         {
             struct location empty_block[POINTERS_PER_BLOCK];
@@ -365,9 +393,11 @@ int inode_set_block_location(struct inode *inode, uint32_t block_num, struct loc
             fs_append(empty_block, BLOCK_SIZE, &l1_block[l1]);
         }
 
+        // Read level 2
         struct location l2_block[POINTERS_PER_BLOCK];
         fs_read(&l1_block[l1], l2_block, BLOCK_SIZE);
 
+        // Create level 3 if needed
         if (l2_block[l2].segment_id == 0xFFFFFFFF)
         {
             struct location empty_block[POINTERS_PER_BLOCK];
@@ -375,16 +405,19 @@ int inode_set_block_location(struct inode *inode, uint32_t block_num, struct loc
             fs_append(empty_block, BLOCK_SIZE, &l2_block[l2]);
         }
 
+        // Read, modify, and write level 3
         struct location l3_block[POINTERS_PER_BLOCK];
         fs_read(&l2_block[l2], l3_block, BLOCK_SIZE);
-        
         l3_block[l3] = *loc;
-        
         fs_append(l3_block, BLOCK_SIZE, &l2_block[l2]);
+
+        // Write back level 2
         fs_append(l2_block, BLOCK_SIZE, &l1_block[l1]);
+
+        // Write back level 1
         fs_append(l1_block, BLOCK_SIZE, &inode->triple_indirect);
         return 1;
     }
 
-    return 0; 
+    return 0; // Block number out of range
 }
