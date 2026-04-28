@@ -50,12 +50,12 @@ void print_usage(void)
     printf("  %-30s %s\n", "--init", "Initialize a fresh file system");
 
     printf(COLOR_GREEN "\nEXAMPLES:\n" COLOR_RESET);
-    printf("  %-70s %s\n", "./exfs-log-structured-file-system -l", "Show all files");
-    printf("  %-70s %s\n", "./exfs-log-structured-file-system -a /file.txt -f ~/file.txt", "Add file");
-    printf("  %-70s %s\n", "./exfs-log-structured-file-system -r /file.txt", "Remove file");
-    printf("  %-70s %s\n", "./exfs-log-structured-file-system -e /file.txt > out.txt", "Extract file");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -l", "Show all files and directories");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -a /docs/notes.txt -f ~/notes.txt", "Add file <notes.txt>");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -r /docs/notes.txt", "Remove the fie <notes.txt>");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -e /docs/notes.txt > output.txt", "Extract file and save");
     printf("  %-70s %s\n", "./exfs-log-structured-file-system -c", "Run cleaner");
-    printf("  %-70s %s\n", "./exfs-log-structured-file-system -D /file.txt", "Debug file");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -D /docs", "Debug directory");
     printf("\n");
 }
 

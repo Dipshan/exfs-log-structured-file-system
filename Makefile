@@ -12,27 +12,20 @@ SRCS = src/main.c \
        src/imap/imap.c \
        src/utils/utils.c
 
-# Object files
-OBJS = $(SRCS:.c=.o)
-
 # Default target
 all: $(TARGET)
 
-# Link object files into executable
-$(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET)
-
-# Compile .c files into .o files
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# Compile directly from source to executable
+$(TARGET): $(SRCS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS)
 
 # Initialize file system
 init: $(TARGET)
 	./$(TARGET) --init
 
-# Remove executable and object files
+# Remove executable
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET)
 
 # Remove segments and checkpoint
 clean-fs:
@@ -51,7 +44,7 @@ help:
 	@echo "-----------------------------"
 	@echo "make               - Compile the file system"
 	@echo "make init          - Initialize fresh file system"
-	@echo "make clean         - Remove executable and object files"
+	@echo "make clean         - Remove executable"
 	@echo "make clean-fs      - Remove segments and checkpoint"
 	@echo "make clean-all     - Remove everything"
 	@echo "make reset         - Complete reset"
