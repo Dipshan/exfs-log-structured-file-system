@@ -1,19 +1,16 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -I./src -Wall
+CFLAGS = -I./src
 
 # Target executable name
 TARGET = exfs-log-structured-file-system
 
 # Source files
 SRCS = src/main.c \
-       src/fs/fs.c \
-       src/inode/inode.c \
-       src/imap/imap.c \
-       src/utils/utils.c
-
-# Default target
-all: $(TARGET)
+      src/fs/fs.c \
+      src/inode/inode.c \
+      src/imap/imap.c \
+      src/utils/utils.c
 
 # Compile directly from source to executable
 $(TARGET): $(SRCS)
@@ -34,9 +31,6 @@ clean-fs:
 # Remove everything
 clean-all: clean clean-fs
 
-# Complete reset
-reset: clean-all all init
-
 # Help menu
 help:
 	@echo ""
@@ -51,4 +45,4 @@ help:
 	@echo "make help          - Show this help menu"
 	@echo ""
 
-.PHONY: all init clean clean-fs clean-all reset help
+.PHONY: init clean clean-fs clean-all help

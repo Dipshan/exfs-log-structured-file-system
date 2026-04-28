@@ -423,7 +423,7 @@ void fs_list(void)
 // For optimizing and reclaiming host disk space
 void fs_cleaner(void)
 {
-    printf("\n----- CLEANER -----\n");
+    printf("\n----- CLEANER START -----\n");
     printf("Current active segment: %d\n", checkpoint.active_segment);
     printf("Current write offset: %d\n\n", checkpoint.active_offset);
 
