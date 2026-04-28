@@ -536,7 +536,7 @@ void fs_cleaner(void)
             // Only delete segments older than starting_segment (preserves newly written data)
             if (seg_id < starting_segment)
             {
-                char path[100];
+                char path[512];
                 sprintf(path, "segments/%s", entry->d_name);
                 remove(path);
             }
