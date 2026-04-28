@@ -241,12 +241,44 @@ void fs_add(const char *path, const char *source)
     char host_parent[1024], file_name[256];
     split_path(source, host_parent, file_name);
 
-    // Create destination directory if needed
+    // Create destination directory path if needed
     if (strcmp(path, "/") != 0)
     {
-        char dummy[1024];
-        snprintf(dummy, sizeof(dummy), "%s/__dummy__", path);
-        create_parent_dirs(dummy);
+        char temp[1024];
+        char current[1024] = "";
+
+        strncpy(temp, path, sizeof(temp) - 1);
+        temp[sizeof(temp) - 1] = '\0';
+
+        char *token = strtok(temp, "/");
+
+        while (token != NULL)
+        {
+            strcat(current, "/");
+            strcat(current, token);
+
+            if (find_inode(current) == 0)
+            {
+                char parent_path[1024], dir_name[256];
+                split_path(current, parent_path, dir_name);
+
+                uint32_t parent_dir_inode =
+                    (strcmp(parent_path, "/") == 0) ? 0 : find_inode(parent_path);
+
+                if (parent_dir_inode == 0 && strcmp(parent_path, "/") != 0)
+                {
+                    printf("ERROR: Could not find/create parent %s\n", parent_path);
+                    fclose(host_file);
+                    return;
+                }
+
+                uint32_t new_dir_inode;
+                inode_create(&new_dir_inode, TYPE_DIRECTORY);
+                dir_add_entry(parent_dir_inode, dir_name, new_dir_inode);
+            }
+
+            token = strtok(NULL, "/");
+        }
     }
 
     // Get destination directory inode
