@@ -237,19 +237,21 @@ void fs_add(const char *path, const char *source)
     uint32_t file_size = ftell(host_file);
     fseek(host_file, 0, SEEK_SET);
 
-    // Split path into parent and name
+    // Split source path to get host file name
     char host_parent[1024], file_name[256];
     split_path(source, host_parent, file_name);
 
-    // Create parent directories if needed
-    if (strcmp(path, "/") != 0) {
+    // Create destination directory if needed
+    if (strcmp(path, "/") != 0)
+    {
         char dummy[1024];
-        snprintf(dummy, sizeof(dummy), "%s/dummy", path);
+        snprintf(dummy, sizeof(dummy), "%s/__dummy__", path);
         create_parent_dirs(dummy);
     }
 
-    // Get parent directory inode
+    // Get destination directory inode
     uint32_t parent_inode = (strcmp(path, "/") == 0) ? 0 : find_inode(path);
+
     if (parent_inode == 0 && strcmp(path, "/") != 0)
     {
         printf("ERROR: Parent directory not found\n");
