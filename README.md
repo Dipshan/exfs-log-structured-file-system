@@ -147,6 +147,10 @@ diff test.txt out.txt
 
 Expected: no output
 
+File correctness is verified using:
+- diff for text files
+- cmp for binary files
+
 ## Binary File Test
 
 ```
@@ -191,6 +195,8 @@ creates:
 
 /docs/test.txt
 
+System messages are printed to stderr to avoid interfering with file extraction via stdout redirection.
+
 # What Works and Known Issues
 
 ## What Works
@@ -205,8 +211,4 @@ creates:
 
 ## Known Issues
 
-- The `-a` path is treated as a directory, not a full file path
-- Paths like `/file.txt` may create `/file.txt/file.txt`
-- Duplicate directories may appear if paths are reused
-- Cleaner works for basic cases but not heavily tested
-- Some output is printed to stdout, which can affect extraction
+- Cleaner works for standard cases but has not been extensively stress-tested under heavy workloads
