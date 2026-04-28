@@ -10,13 +10,13 @@
 // Inode structure - must be exactly 4096 bytes
 struct inode
 {
-    uint32_t size;                   // File size in bytes
-    uint32_t type;                   // 0 = file, 1 = directory
-    struct location direct[10];      // 10 direct block pointers
-    struct location single_indirect; // Single indirect block pointer
-    struct location double_indirect; // Double indirect block pointer
-    struct location triple_indirect; // Triple indirect block pointer
-    uint8_t reserved[3984];          // Padding to 4096 bytes
+    uint32_t size;                   // File size in bytes (4 bytes)
+    uint32_t type;                   // TYPE_FILE (0) or TYPE_DIRECTORY (1) (4 bytes)
+    struct location direct[10];      // 10 direct block pointers (80 bytes)
+    struct location single_indirect; // Single indirect block pointer (8 bytes)
+    struct location double_indirect; // Double indirect block pointer (8 bytes)
+    struct location triple_indirect; // Triple indirect block pointer (8 bytes)
+    uint8_t reserved[3984];          // Padding to strictly enforce 4096-byte size
 };
 
 // Directory entry - 256 bytes, 16 entries per 4KB block

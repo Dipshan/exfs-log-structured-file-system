@@ -84,12 +84,12 @@ void fs_init(void)
         // Initialize dynamic imap from the stored checkpoint location
         imap_init();
         open_current_segment();
-        fprintf(stderr, "FS loaded. Writing to segment %d at offset %d\n",
+        fprintf(stderr, "File System loaded. Writing to segment %d at offset %d\n",
                 checkpoint.active_segment, checkpoint.active_offset);
     }
     else
     {
-        // Create new FS
+        // Initialize fresh file system
         printf("Creating new file system...\n");
 
         checkpoint.active_segment = 0;
@@ -185,6 +185,8 @@ void fs_append(void *data, size_t size, struct location *loc)
     fseek(current_file, checkpoint.active_offset, SEEK_SET);
     safe_write(current_file, data, size);
 
+    fflush(current_file);
+
     // Advance write head
     checkpoint.active_offset += size;
 
@@ -222,34 +224,38 @@ void fs_read(struct location *loc, void *buffer, size_t size)
 }
 
 // Adds file from host to FS
-void fs_add(const char *path, const char *source)
+void fs_add(const char *target_dir, const char *source_file)
 {
     // Open host file
-    FILE *host_file = fopen(source, "rb");
+    FILE *host_file = fopen(source_file, "rb");
     if (!host_file)
     {
-        printf("ERROR: Cannot open host file '%s'\n", source);
+        printf("ERROR: Cannot open host file '%s'\n", source_file);
         return;
     }
 
     // Get file size
     fseek(host_file, 0, SEEK_END);
-    uint32_t file_size = ftell(host_file);
+    uint32_t file_size = (uint32_t)ftell(host_file);
     fseek(host_file, 0, SEEK_SET);
 
     // Split path into parent and name
-    char parent_path[1024], file_name[256];
-    split_path(path, parent_path, file_name);
+    char host_parent[1024], file_name[256];
+    split_path(source_file, host_parent, file_name);
 
     // Create parent directories if needed
-    if (strcmp(parent_path, "/") != 0 && !path_exists(parent_path))
-        create_parent_dirs(path);
+    if (strcmp(target_dir, "/") != 0)
+    {
+        char dummy_path[1024];
+        snprintf(dummy_path, sizeof(dummy_path), "%s/dummy", target_dir);
+        create_parent_dirs(dummy_path);
+    }
 
     // Get parent directory inode
-    uint32_t parent_inode = (strcmp(parent_path, "/") == 0) ? 0 : find_inode(parent_path);
-    if (parent_inode == 0 && strcmp(parent_path, "/") != 0)
+    uint32_t parent_inode = (strcmp(target_dir, "/") == 0) ? 0 : find_inode(target_dir);
+    if (parent_inode == 0 && strcmp(target_dir, "/") != 0)
     {
-        printf("ERROR: Parent directory not found\n");
+        printf("ERROR: Target directory not found\n");
         fclose(host_file);
         return;
     }
@@ -290,7 +296,14 @@ void fs_add(const char *path, const char *source)
     inode.size = file_size;
     inode_write(file_inode, &inode);
 
-    printf("Added '%s' (%u bytes, %u blocks)\n", path, file_size, total_blocks);
+    // Ensure clean printout of the new path
+    char full_fs_path[1024];
+    if (strcmp(target_dir, "/") == 0)
+        snprintf(full_fs_path, sizeof(full_fs_path), "/%s", file_name);
+    else
+        snprintf(full_fs_path, sizeof(full_fs_path), "%s/%s", target_dir, file_name);
+
+    printf("Added '%s' (%u bytes, %u blocks)\n", full_fs_path, file_size, total_blocks);
 
     // Persist changes
     imap_flush();
@@ -411,9 +424,10 @@ void fs_list(void)
 void fs_cleaner(void)
 {
     printf("\n----- CLEANER -----\n");
-    printf("Active segment: %d, offset: %d\n", checkpoint.active_segment, checkpoint.active_offset);
+    printf("Current active segment: %d\n", checkpoint.active_segment);
+    printf("Current write offset: %d\n\n", checkpoint.active_offset);
 
-    // Remember starting segment
+    // Memorize starting segment
     uint32_t starting_segment = checkpoint.active_segment;
 
     // Step 1: Collect all live inodes

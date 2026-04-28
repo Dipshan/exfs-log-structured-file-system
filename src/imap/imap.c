@@ -62,7 +62,7 @@ void imap_flush(void)
     for (int i = 0; i < IMAP_CHUNK_SIZE && i <= max_inode; i++)
         chunk.mappings[i] = imap_cache[i];
 
-    // Pad remaining with invalid markers
+    // Pad remaining slots with invalid markers
     for (int i = max_inode + 1; i < IMAP_CHUNK_SIZE; i++)
     {
         chunk.mappings[i].segment_id = 0xFFFFFFFF;
@@ -94,7 +94,7 @@ void imap_update(uint32_t inode_num, struct location *loc)
     if (inode_num > max_inode)
         max_inode = inode_num;
 
-    // Flush every 10 updates for crash safety
+    // Persist every 10 updates to balance I/O overhead with crash safety
     static int update_counter = 0;
     if (++update_counter >= 10)
     {

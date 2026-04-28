@@ -50,12 +50,12 @@ void print_usage(void)
     printf("  %-30s %s\n", "--init", "Initialize a fresh file system");
 
     printf(COLOR_GREEN "\nEXAMPLES:\n" COLOR_RESET);
-    printf("  %-50s %s\n", "./exfs-log-structured-file-system -l", "Show all files");
-    printf("  %-50s %s\n", "./exfs-log-structured-file-system -a /file.txt -f ~/file.txt", "Add file");
-    printf("  %-50s %s\n", "./exfs-log-structured-file-system -r /file.txt", "Remove file");
-    printf("  %-50s %s\n", "./exfs-log-structured-file-system -e /file.txt > out.txt", "Extract file");
-    printf("  %-50s %s\n", "./exfs-log-structured-file-system -c", "Run cleaner");
-    printf("  %-50s %s\n", "./exfs-log-structured-file-system -D /file.txt", "Debug file");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -l", "Show all files");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -a /file.txt -f ~/file.txt", "Add file");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -r /file.txt", "Remove file");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -e /file.txt > out.txt", "Extract file");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -c", "Run cleaner");
+    printf("  %-70s %s\n", "./exfs-log-structured-file-system -D /file.txt", "Debug file");
     printf("\n");
 }
 
@@ -75,14 +75,14 @@ int main(int argc, char *argv[])
     {
         printf("Initializing fresh file system...\n");
         fs_init();
-        printf("File system initialized successfully\n");
+        printf("File system initialized successfully.\n\n");
         return 0;
     }
 
     // All other commands require existing FS
     if (access("checkpoint.bin", F_OK) != 0)
     {
-        fprintf(stderr, COLOR_RED "ERROR: File system not initialized. Run --init first\n" COLOR_RESET);
+        fprintf(stderr, COLOR_RED "ERROR: File system not initialized. Run --init first\n\n" COLOR_RESET);
         return 1;
     }
 
@@ -102,7 +102,8 @@ int main(int argc, char *argv[])
         // Validate -a syntax: -a /path -f /host/file
         if (argc < 5 || strcmp(argv[3], "-f") != 0)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Invalid add syntax. Use: -a /path -f /host/file\n" COLOR_RESET);
+            fprintf(stderr, COLOR_RED "ERROR: Invalid add syntax. Use: -a /path -f /host/file\n\n" COLOR_RESET);
+            printf("\n");
             return 1;
         }
 
@@ -112,34 +113,34 @@ int main(int argc, char *argv[])
         // Verify source file exists on host
         if (access(host_path, F_OK) != 0)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Host file '%s' does not exist\n" COLOR_RESET, host_path);
+            fprintf(stderr, COLOR_RED "ERROR: Host file '%s' does not exist.\n\n" COLOR_RESET, host_path);
             return 1;
         }
 
         printf("Adding file...\n");
-        printf("  FS path: %s\n", fs_path);
-        printf("  Host: %s\n", host_path);
+        printf("FS path: %s\n", fs_path);
+        printf("Host: %s\n", host_path);
         fs_add(fs_path, host_path);
-        printf(COLOR_GREEN "File added successfully\n" COLOR_RESET);
+        printf(COLOR_GREEN "File added successfully.\n\n" COLOR_RESET);
     }
     else if (strcmp(argv[1], "-r") == 0)
     {
         if (argc < 3)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Invalid remove syntax. Use: -r /path\n" COLOR_RESET);
+            fprintf(stderr, COLOR_RED "ERROR: Invalid remove syntax. Use: -r /path\n\n" COLOR_RESET);
             return 1;
         }
 
         char *fs_path = argv[2];
         printf("Removing: %s\n", fs_path);
         fs_remove(fs_path);
-        printf(COLOR_GREEN "Remove complete\n" COLOR_RESET);
+        printf(COLOR_GREEN "Remove complete.\n\n" COLOR_RESET);
     }
     else if (strcmp(argv[1], "-e") == 0)
     {
         if (argc < 3)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Invalid extract syntax. Use: -e /path\n" COLOR_RESET);
+            fprintf(stderr, COLOR_RED "ERROR: Invalid extract syntax. Use: -e /path\n\n" COLOR_RESET);
             return 1;
         }
 
@@ -154,7 +155,7 @@ int main(int argc, char *argv[])
     {
         if (argc < 3)
         {
-            fprintf(stderr, COLOR_RED "ERROR: Invalid debug syntax. Use: -D /path\n" COLOR_RESET);
+            fprintf(stderr, COLOR_RED "ERROR: Invalid debug syntax. Use: -D /path\n\n" COLOR_RESET);
             return 1;
         }
 
@@ -163,7 +164,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        fprintf(stderr, COLOR_RED "ERROR: Unknown option '%s'\n" COLOR_RESET, argv[1]);
+        fprintf(stderr, COLOR_RED "ERROR: Unknown option '%s'\n\n" COLOR_RESET, argv[1]);
         print_usage();
         return 1;
     }

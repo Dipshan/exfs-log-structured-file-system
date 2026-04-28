@@ -176,7 +176,7 @@ uint32_t dir_find_entry(uint32_t dir_inode, const char *name)
             return entries[i].inode_num;
     }
 
-    return 0; // Not found
+    return 0;
 }
 
 // Recursively prints directory tree with indentation for depth
