@@ -243,9 +243,7 @@ void fs_add(const char *path, const char *source)
 
     // Create parent directories if needed
     if (strcmp(path, "/") != 0) {
-    char dummy[1024];
-    snprintf(dummy, sizeof(dummy), "%s/dummy", path);
-    create_parent_dirs(dummy);
+        create_parent_dirs(path);
     }
 
     // Get parent directory inode
