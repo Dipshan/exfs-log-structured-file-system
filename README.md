@@ -34,33 +34,32 @@ Southern Illinois University Edwardsville
 # System Architecture
 
 ```
-                    ┌─────────────────────────────┐
-                    │        User Interface       │
-                    │  -a  -e  -l  -r  -c  -D     │
-                    └─────────────┬───────────────┘
+                    ┌───────────────────────────┐
+                    │        User Interface     │
+                    │  -a  -e  -l  -r  -c  -D   │
+                    └─────────────┬─────────────┘
                                   │
                                   ▼
-                    ┌─────────────────────────────┐
-                    │      File System Core       │
-                    │ (fs.c, inode.c, imap.c)     │
-                    └─────────────┬───────────────┘
+                    ┌──────────────────────────┐
+                    │      File System Core    │
+                    │ (fs.c, inode.c, imap.c)  │
+                    └─────────────┬────────────┘
                                   │
                                   |
                                   ▼
        ┌──────────────────────────-──────────────────────────┐
        │                                                     │
        ▼                                                     ▼
-┌───────────────────────────┐                  ┌─────────────────────────────┐
-│     Checkpoint Region     │                  │        Segment Log          │
-│       checkpoint.bin      │                  │   segment0.bin, segment1…   │
-│                           │                  │                             │
-│  - Write Head             │                  │  - Data Blocks (4KB)        │
-│  - Imap Location          │                  │  - Inodes (4KB)             │
-│  - Next Inode Number      │                  │  - Directory Entries        │
-└─────────────┬─────────────┘                  │  - Imap Chunks              │
-             │                                └─────────────┬───────────────┘
+┌──────────────────────────┐                   ┌────────────────────────────┐
+│     Checkpoint Region    │                   │        Segment Log         │
+│       checkpoint.bin     │                   │   segment0.bin.            │
+│                          │                   │                            │
+│  - Write Head            │                   │  - Data Blocks (4KB)       │
+│  - Imap Location         │                   │  - Inodes (4KB)            │
+│  - Next Inode Number     │                   │  - Directory Entries       │
+└────────────┬─────────────┘                   │  - Imap Chunks             │
+             │                                 └────────────┬───────────────┘
              ▼                                              │
-                                                            |
     ┌─────────────────────────────┐                         │
     │           IMAP              │◄────────────────────────┘
     │  (Inode → Segment, Offset)  │
@@ -85,71 +84,73 @@ The system follows a **log-structured design**, where all updates are appended s
 
 This design ensures **sequential disk writes, efficient recovery, and consistency without in-place updates**.
 
-# How to Compile and Initialize
-
+# Project Folder Structure
 ```
-make
-./exfs-log-structured-file-system --init
-```
-
-# Commands
-
-## List the file system
-
-```
-./exfs-log-structured-file-system -l
-```
-
-## Add a file
-
-```
-./exfs-log-structured-file-system -a /docs -f test.txt
-```
-
-This stores the host file as:
-
-/docs/test.txt
-
-## Extract a file
-
-```
-./exfs-log-structured-file-system -e /docs/test.txt > output.txt
+exfs-log-structured-file-system/
+      ├── segments/   
+      ├── src/
+      │   ├── common.h       # Global constants (BLOCK_SIZE, SEGMENT_SIZE, location struct)
+      │   ├── main.c         # Entry point - CLI parser and command routerof the program
+      │   ├── fs/
+      │   │     ├── fs.h     # FS API declarations and checkpoint struct
+      │   │     └── fs.c     # Core FS: segments, checkpoint, cleaner, add, extract, remove
+      │   │
+      │   ├── inode/
+      │   │     ├── inode.h  # Inode and directory entry structs
+      │   │     └── inode.c  # Inode management and indirect block traversal
+      │   │
+      │   ├── imap/
+      │   │     ├── imap.h   # Imap chunk structure (512 mappings per 4KB)
+      │   │     └── imap.c   # In-memory cache + segment flushing for imap
+      │   │
+      │   └── utils/
+      │         ├── utils.h  # Safe I/O and path resolution helpers
+      │         └── utils.c  # safe_read/write, split_path, find_inode, create_parent_dirs
+      │
+      ├── Makefile           # Build automation with compile, clean, init commands
+      └── README.md          # Project documentation and testing guide
+  
 ```
 
-## Remove a file or directory
+# List of Commands
 
-```
-./exfs-log-structured-file-system -r /docs/test.txt
-```
+## Makefile Commands
 
-## Run cleaner
+| Commands       | What it does                        |
+| -------------- | ----------------------------------- |
+| make           | Compiles the file system            |
+| make init      | Initializes a fresh file system     |
+| make clean     | Deletes executable                  |
+| make clean-fs  | Deletes segments and checkpoint.bin |
+| make clean-all | Deletes everything                  |
+| make help      | Shows all commands                  |
 
-```
-./exfs-log-structured-file-system -c
-```
+## Test Commands
 
-## Debug mode
-
-```
-./exfs-log-structured-file-system -D /docs
-```
+| Commands                                                         | What it does                            |
+| ---------------------------------------------------------------- | --------------------------------------- |
+| ./exfs-log-structured-file-system --init                         | Initialize file system                  |
+| ./exfs-log-structured-file-system -l                             | List all files                          |
+| ./exfs-log-structured-file-system -a /docs -f test.txt           | Stores the host file as: /docs/test.txt |
+| ./exfs-log-structured-file-system -e /docs/test.txt > output.txt | Extract a file                          |
+| ./exfs-log-structured-file-system -r /docs/test.txt              | Remove a file                           |
+| ./exfs-log-structured-file-system -r /docs                       | Remove a directory                      |
+| ./exfs-log-structured-file-system -D /test.txt                   | Debug an inode                          |
+| ./exfs-log-structured-file-system -c                             | Run cleaner                             |
+| ./exfs-log-structured-file-system -h                             | Show help                               |
 
 # Testing
 
 ## Text File Test
 
 ```
-echo "hello" > test.txt
+echo "hello" > test.txt // file creation
 ./exfs-log-structured-file-system -a /docs -f test.txt
 ./exfs-log-structured-file-system -e /docs/test.txt > out.txt
-diff test.txt out.txt
+diff test.txt out.txt && echo 'No difference'
+
+Expected output: No difference
 ```
-
-Expected: no output
-
-File correctness is verified using:
-- diff for text files
-- cmp for binary files
 
 ## Binary File Test
 
@@ -157,18 +158,67 @@ File correctness is verified using:
 head -c 10000 /dev/urandom > binary.bin
 ./exfs-log-structured-file-system -a /bin -f binary.bin
 ./exfs-log-structured-file-system -e /bin/binary.bin > binary_out.bin
-cmp binary.bin binary_out.bin
-```
+cmp binary.bin binary_out.bin && echo 'No difference'
 
-Expected: no output
+Expected output: No difference
+```
 
 ## Large File Test
 
+### Single Indirect Block Test (1MB)
+
 ```
-head -c 50000 /dev/urandom > large.bin
-./exfs-log-structured-file-system -a /large -f large.bin
-./exfs-log-structured-file-system -e /large/large.bin > large_out.bin
-cmp large.bin large_out.bin
+dd if=/dev/urandom of=1MB.bin bs=1M count=1 2>/dev/null
+./exfs-log-structured-file-system -a /large/1MB.bin -f 1MB.bin
+./exfs-log-structured-file-system -D /large/1MB.bin | grep -A2 Indirect
+
+Expected output:
+
+Indirect:
+  Single: yes
+  Double: no
+```
+
+### Double Indirect Block Test (5MB)
+
+```
+dd if=/dev/urandom of=5MB.bin bs=1M count=5 2>/dev/null
+./exfs-log-structured-file-system -a /large/5MB.bin -f 5MB.bin
+./exfs-log-structured-file-system -D /large/5MB.bin | grep -A2 Indirect
+
+Expected output:
+
+Indirect:
+  Single: yes
+  Double: yes
+```
+
+### Triple Indirect Block Test (1.1GB)
+
+```
+dd if=/dev/urandom of=1GB.bin bs=1M count=1100 2>/dev/null
+./exfs-log-structured-file-system -a /large/1GB.bin -f 1GB.bin
+./exfs-log-structured-file-system -D /large/1GB.bin | grep -A2 Indirect
+
+Expected output:
+
+Indirect:
+  Single: yes
+  Double: yes
+  Triple: yes
+```
+
+### Extract and Verify Large Files
+
+```
+./exfs-log-structured-file-system -e /large/1MB.bin > 1MB_out.bin
+cmp 1MB.bin 1MB_out.bin && echo 'No difference'
+
+./exfs-log-structured-file-system -e /large/5MB.bin > 5MB_out.bin
+cmp 5MB.bin 5MB_out.bin && echo 'No difference'
+
+./exfs-log-structured-file-system -e /large/1GB.bin > 1GB_out.bin
+cmp 1GB.bin 1GB_out.bin && echo 'No difference'
 ```
 
 ## Segment Growth Test
@@ -181,6 +231,47 @@ ls -lh segments
 cmp segtest.bin persisted.bin
 ```
 
+## Segment clean test
+```
+# Create 3MB file (spans multiple segments)
+dd if=/dev/urandom of=temp.bin bs=1M count=3 2>/dev/null
+
+# Add to file system
+./exfs-log-structured-file-system -a /temp/temp.bin -f temp.bin
+
+# Check segments before deletion
+./exfs-log-structured-file-system -r /temp
+
+# Run cleaner to reclaim space
+./exfs-log-structured-file-system -c
+
+# Verify old segments are deleted
+ls -lh segments/
+
+Expected Workflow:
+
+Before removal:
+segments/
+  ├── segment0.bin
+  ├── segment1.bin
+  └── segment2.bin
+
+After removal:
+segments/
+  └── segment3.bin   (or newer, old segments deleted)
+
+Expected Cleaner Output:
+
+----- CLEANER -----
+Current active segment: 2
+Current write offset: 3145728
+
+Live inodes: 2
+Live blocks: 0
+
+----- CLEANER COMPLETE -----
+```
+
 # Notes
 
 The -a command treats the given path as a destination directory, and the file name is taken from the host file.
@@ -189,13 +280,11 @@ Example:
 
 ```
 ./exfs-log-structured-file-system -a /docs -f test.txt
-```
 
-creates:
-
-/docs/test.txt
+creates: /docs/test.txt
 
 System messages are printed to stderr to avoid interfering with file extraction via stdout redirection.
+```
 
 # What Works and Known Issues
 

@@ -572,7 +572,7 @@ void fs_debug(const char *path)
     inode_read(inode_num, &inode);
 
     // Print basic inode info
-    printf("\n--- INODE DEBUG ---\n");
+    printf("\n----- INODE DEBUG -----\n");
     printf("Path: %s\nInode: %u\nType: %s\nSize: %u bytes\n",
            path, inode_num,
            inode.type == TYPE_FILE ? "FILE" : "DIRECTORY",
